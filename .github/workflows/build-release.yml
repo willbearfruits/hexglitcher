@@ -125,7 +125,7 @@ jobs:
         with:
           draft: false
           prerelease: false
-          generate_release_notes: true
+          body_path: .github/RELEASE_NOTES.md
           files: |
             artifacts/HexGlitcher-Windows/HexGlitcher-Windows-Portable.zip
             artifacts/HexGlitcher-Linux/HexGlitcher-x86_64.AppImage

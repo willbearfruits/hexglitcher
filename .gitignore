@@ -45,6 +45,12 @@ Thumbs.db
 hexglitcher.log
 *.log
 
+# PyInstaller build artifacts
+build/
+dist/
+*.spec.backup
+__pycache__/
+
 # Test files (optional - uncomment if you want to exclude test images)
 # test_images/
 # glitched_output/

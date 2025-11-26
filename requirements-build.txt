@@ -1,0 +1,11 @@
+# Build dependencies for creating executables
+# Install with: pip install -r requirements-build.txt
+
+# Main dependencies
+-r requirements.txt
+
+# Build tools
+pyinstaller>=6.0.0
+
+# Optional: For better compression
+upx-python>=1.0.0

@@ -21,7 +21,7 @@ A production-ready image glitching tool that manipulates raw byte data while pre
 
 Download the latest release for your platform - no Python installation required:
 
-**[📥 Download Latest Release](https://github.com/YOUR-USERNAME/image-glitcher/releases/latest)**
+**[📥 Download Latest Release](https://github.com/willbearfruits/hexglitcher/releases/latest)**
 
 - **Windows:** `HexGlitcher-Windows-Portable.zip` - Portable EXE (no installation)
 - **Linux:** `HexGlitcher-x86_64.AppImage` - Universal AppImage
@@ -54,8 +54,8 @@ chmod +x HexGlitcher-x86_64.AppImage
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR-USERNAME/image-glitcher.git
-cd image-glitcher
+git clone https://github.com/willbearfruits/hexglitcher.git
+cd hexglitcher
 
 # Install dependencies
 pip install -r requirements.txt
@@ -192,7 +192,7 @@ Created with [Claude Code](https://claude.com/claude-code)
 
 ## Support
 
-- **Issues:** Report bugs and request features on [GitHub Issues](https://github.com/YOUR-USERNAME/image-glitcher/issues)
+- **Issues:** Report bugs and request features on [GitHub Issues](https://github.com/willbearfruits/hexglitcher/issues)
 - **Documentation:** See [BUILDING.md](BUILDING.md) for build instructions
 - **License:** MIT (see [LICENSE](LICENSE))
 

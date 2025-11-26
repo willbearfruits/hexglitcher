@@ -11,6 +11,16 @@ import shutil
 import platform
 from pathlib import Path
 
+# Fix Windows console encoding for Unicode characters
+if sys.platform == 'win32':
+    try:
+        # Try to set UTF-8 encoding for Windows console
+        sys.stdout.reconfigure(encoding='utf-8')
+    except AttributeError:
+        # Python < 3.7 fallback
+        import codecs
+        sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
+
 # Colors for terminal output
 class Colors:
     HEADER = '\033[95m'
@@ -28,15 +38,21 @@ def print_step(message):
 
 def print_success(message):
     """Print a success message."""
-    print(f"{Colors.OKGREEN}✓ {message}{Colors.ENDC}")
+    # Use ASCII checkmark on Windows if Unicode fails
+    checkmark = "√" if sys.platform != 'win32' else "[OK]"
+    print(f"{Colors.OKGREEN}{checkmark} {message}{Colors.ENDC}")
 
 def print_error(message):
     """Print an error message."""
-    print(f"{Colors.FAIL}✗ {message}{Colors.ENDC}")
+    # Use ASCII X on Windows if Unicode fails
+    xmark = "✗" if sys.platform != 'win32' else "[ERROR]"
+    print(f"{Colors.FAIL}{xmark} {message}{Colors.ENDC}")
 
 def print_warning(message):
     """Print a warning message."""
-    print(f"{Colors.WARNING}⚠ {message}{Colors.ENDC}")
+    # Use ASCII warning on Windows if Unicode fails
+    warning = "⚠" if sys.platform != 'win32' else "[WARN]"
+    print(f"{Colors.WARNING}{warning} {message}{Colors.ENDC}")
 
 def check_dependencies():
     """Check if required build dependencies are installed."""

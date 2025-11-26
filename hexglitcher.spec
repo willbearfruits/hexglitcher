@@ -6,12 +6,17 @@ Builds standalone executable for Windows, Linux, and macOS
 """
 
 import sys
+import os
 from PyInstaller.utils.hooks import collect_data_files
 
 block_cipher = None
 
 # Collect data files for PIL/Pillow
 datas = collect_data_files('PIL')
+
+# Check if icon files exist
+icon_ico = 'icon.ico' if os.path.exists('icon.ico') else None
+icon_icns = 'icon.icns' if os.path.exists('icon.icns') else None
 
 a = Analysis(
     ['main.py'],
@@ -55,7 +60,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='icon.ico' if sys.platform == 'win32' else None,
+    icon=icon_ico if sys.platform == 'win32' else None,
 )
 
 # On macOS, create an app bundle
@@ -63,7 +68,7 @@ if sys.platform == 'darwin':
     app = BUNDLE(
         exe,
         name='HexGlitcher.app',
-        icon='icon.icns',
+        icon=icon_icns,
         bundle_identifier='com.glitches.hexglitcher',
         info_plist={
             'NSPrincipalClass': 'NSApplication',

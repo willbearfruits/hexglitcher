@@ -6,6 +6,12 @@ A production-ready image glitching tool that manipulates raw byte data while pre
 ![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)
 
+## Support
+
+Most of my work stays free and open-source.
+Support early access, live sessions, and workshop-time:
+https://www.patreon.com/Seriousshit
+
 ## Features
 
 - **Header Protection:** Adjustable "Safe Zone" to protect file headers (e.g., first 500 bytes) from corruption

@@ -161,8 +161,13 @@ exec "${HERE}/usr/bin/HexGlitcher" "$@"
     apprun_path.write_text(apprun_content)
     apprun_path.chmod(0o755)
 
-    # Create icon (placeholder - would need actual icon)
-    print_warning("Note: Add icon.png to project root for proper AppImage icon")
+    # Copy icon into AppDir (appimagetool requires it)
+    icon_src = Path("icon.png")
+    if icon_src.exists():
+        shutil.copy(icon_src, appdir / "hexglitcher.png")
+        shutil.copy(icon_src, appdir / ".DirIcon")
+    else:
+        print_warning("icon.png not found — AppImage may fail. Add a 256x256 icon.png to the project root.")
 
     # Build AppImage
     try:

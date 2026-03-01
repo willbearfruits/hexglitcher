@@ -141,7 +141,7 @@ This is a **production-ready** release with enterprise-grade security:
 
 **Improvement:** Duplicate "Random" entry removed from the byte operation dropdown.
 
-**CI:** `appimagetool` pinned to release 13 (was rolling `continuous` tag).
+**CI:** `appimagetool` now fetched from the new official repo (`AppImage/appimagetool`); added RELEASE_NOTES existence check.
 
 **CI:** Release step now fails fast with a clear message if `.github/RELEASE_NOTES.md` is missing.
 

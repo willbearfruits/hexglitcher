@@ -199,7 +199,7 @@ Created with [Claude Code](https://claude.com/claude-code)
 - **Improvement:** Status bar shows file info and operation results
 - **Improvement:** Keyboard shortcuts: `Ctrl+O` open, `Ctrl+S` save, `Ctrl+Z` revert
 - **Improvement:** Duplicate "Random" entry removed from byte operation dropdown
-- **CI:** `appimagetool` pinned to release 13; added RELEASE_NOTES existence check
+- **CI:** `appimagetool` updated to new official repo (`AppImage/appimagetool`); added RELEASE_NOTES guard
 
 ### v1.0.0 (Initial Release)
 

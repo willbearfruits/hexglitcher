@@ -185,6 +185,22 @@ Created with [Claude Code](https://claude.com/claude-code)
 
 ## Changelog
 
+### v1.1.0
+- **Fix:** Glitch operations now stack — each operation builds on the current result. Use "Revert to Original" (`Ctrl+Z`) to reset
+- **Fix:** Hex Preview now shows the glitch area (past the safe zone) instead of the protected header
+- **Fix:** Replacement count in Find & Replace was wrong when find/replace patterns had different lengths
+- **Fix:** PIL Image handle and BytesIO stream are now properly closed after each preview render (prevents memory growth)
+- **Fix:** Log file now written to platform-appropriate user directory (fixes silent log loss in AppImage/PyInstaller)
+- **Fix:** Saving to the same path as the source now prompts before overwriting
+- **Fix:** Empty files now show a clear error instead of loading silently
+- **Fix:** Window minimum size enforced (800×500)
+- **Fix:** Decompression bomb protection added (`Image.MAX_IMAGE_PIXELS = 50_000_000`)
+- **Improvement:** Controls disabled until an image is loaded
+- **Improvement:** Status bar shows file info and operation results
+- **Improvement:** Keyboard shortcuts: `Ctrl+O` open, `Ctrl+S` save, `Ctrl+Z` revert
+- **Improvement:** Duplicate "Random" entry removed from byte operation dropdown
+- **CI:** `appimagetool` pinned to release 13; added RELEASE_NOTES existence check
+
 ### v1.0.0 (Initial Release)
 
 - Production-ready image glitching tool

@@ -1,4 +1,4 @@
-# 🎨 HexGlitcher v1.0.0 - Production Release
+# HexGlitcher v1.1.0
 
 **Transform images into stunning glitch art with surgical precision!**
 
@@ -109,45 +109,47 @@ This is a **production-ready** release with enterprise-grade security:
 
 ---
 
-## 📝 Changelog
+## Changelog
 
-### What's New in v1.0.0
+### v1.1.0
 
-**Core Features:**
-- Production-ready image glitching with GUI
-- Header protection mechanism to preserve file validity
-- Real-time preview with hex data display
-- Find & replace for specific byte sequences
-- Random corruption with 5 different algorithms
-- Support for JPEG, PNG, BMP, GIF, and WebP formats
+**Fix:** Glitch operations now stack correctly — each "Glitch It!" / "Apply Find/Replace" builds on the current glitched state instead of always resetting to the original file body. Use the new **Revert to Original** button (or `Ctrl+Z`) to reset when needed.
 
-**Security Improvements:**
-- File size validation (100MB limit prevents memory exhaustion)
-- File type validation (images only)
-- Integer input validation with range checking
-- Enhanced hex input validation
-- Path traversal protection on save operations
-- System directory write protection
+**Fix:** Hex Preview now shows the **glitch area** (bytes after the safe zone) rather than the protected header, so you can actually see what's being corrupted.
 
-**Code Quality:**
-- Type hints on all methods
-- Comprehensive docstrings
-- Modular refactored architecture
-- Optimized random glitch algorithm
-- Constants extracted from magic numbers
-- Comprehensive logging system
+**Fix:** Replacement count in Find & Replace was calculated incorrectly when find and replace patterns had different lengths. Now counts occurrences before the operation.
 
-**Build System:**
-- Cross-platform build scripts (Windows, Linux, macOS)
-- Automated GitHub Actions CI/CD
-- One-click builds for all platforms
-- Portable executables with no dependencies
+**Fix:** PIL Image handle was never closed in the preview renderer. Each glitch cycle now properly closes the image and BytesIO stream, preventing gradual memory growth over long sessions.
 
-**Documentation:**
-- Complete user guide in README
-- Build instructions for developers
-- Security feature documentation
-- File format-specific tips and tricks
+**Fix:** Log file is now written to a platform-appropriate user-writable path (`%APPDATA%\HexGlitcher` on Windows, `~/Library/Logs/HexGlitcher` on macOS, `~/.local/state/hexglitcher` on Linux) instead of the current working directory. This fixes silent log loss when running from AppImage or PyInstaller builds.
+
+**Fix:** Saving to the same path as the original source file now shows a confirmation dialog instead of silently overwriting.
+
+**Fix:** Empty (zero-byte) files now show a clear error instead of loading silently and showing a broken preview.
+
+**Fix:** Window can no longer be resized to an unusable size (minimum 800×500).
+
+**Fix:** Decompression bomb protection added (`Image.MAX_IMAGE_PIXELS = 50_000_000`).
+
+**Improvement:** Controls (Glitch It!, Apply Find/Replace, Save, Revert) are disabled until an image is loaded — no more silent no-ops.
+
+**Improvement:** Status bar shows file name, size, and operation results after each action.
+
+**Improvement:** Keyboard shortcuts — `Ctrl+O` open, `Ctrl+S` save, `Ctrl+Z` revert to original.
+
+**Improvement:** Left panel has a fixed minimum width and no longer collapses.
+
+**Improvement:** Duplicate "Random" entry removed from the byte operation dropdown.
+
+**CI:** `appimagetool` pinned to release 13 (was rolling `continuous` tag).
+
+**CI:** Release step now fails fast with a clear message if `.github/RELEASE_NOTES.md` is missing.
+
+**Deps:** Pillow pinned to `>=11.0.0,<12.0.0`.
+
+### v1.0.0
+
+- Initial release
 
 ---
 

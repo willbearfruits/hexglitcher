@@ -185,6 +185,38 @@ Created with [Claude Code](https://claude.com/claude-code)
 
 ## Changelog
 
+### v2.0.0 — Major Rewrite
+
+**New Architecture:**
+- Three-panel resizable layout (saved states | preview + hex viewer | operations)
+- Menubar with File / Edit / Operations / View / Export menus
+- Multi-level undo/redo (range-based, 50 levels) — `Ctrl+Z` / `Ctrl+Y`
+- Region selection: set `region_start` and `region_end` to target any byte range
+- Fixed seed toggle for reproducible glitch sequences
+
+**New Panels:**
+- **Iteration Strip** (left panel): scrollable saved-state thumbnails; click any to restore, right-click to remove
+- **Hex Viewer** (center): paged 3-column display (offset | hex | ascii) with amber diff highlighting; Jump to Header and Last Edit buttons
+- **Operations Notebook** (right panel): 5 dedicated tabs
+
+**New Operation Tabs:**
+- **Random** — XOR / AND / OR mask, bit shift, bit rotate, step mode (every Nth byte)
+- **Find/Replace** — Exact, Wildcard `??`, Greater Than, Less Than, Range match modes
+- **Block** — Reverse, Sort Asc/Desc, Shuffle, Swap A↔B, Copy-Overwrite, XOR Blend, Step-Skip
+- **Arithmetic** — Add / Subtract / Multiply with Wrap or Clamp overflow; optional channel-stride targeting
+- **Inject** — Overwrite-tile, XOR-tile, Insert (byte shift with range warning)
+
+**New Formats:**
+- Added TGA, TIFF, PCX, and raw binary (`.raw`/`.bin`) support
+- Auto-detect default header protection per format on load (`FORMAT_HEADER_SIZES`)
+
+**Export:**
+- **Animated GIF export** from saved states (ExportGifDialog) — assembles pre-corrupted frames
+- **Auto-sequence** export: applies N random operations and saves each frame
+
+**Batch Mode:**
+- Threaded batch processor; progress bar with cancel button; applies any operation N times
+
 ### v1.1.0
 - **Fix:** Glitch operations now stack — each operation builds on the current result. Use "Revert to Original" (`Ctrl+Z`) to reset
 - **Fix:** Hex Preview now shows the glitch area (past the safe zone) instead of the protected header

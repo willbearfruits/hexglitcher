@@ -15,6 +15,7 @@ def register_builtin_ops() -> None:
         return
     # importing each module runs its @register_op decorators
     from . import byte_ops  # noqa: F401
+    from . import audio_ops  # noqa: F401
     from . import pixel_ops  # noqa: F401
     _REGISTERED = True
 

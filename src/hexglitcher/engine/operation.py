@@ -97,6 +97,7 @@ class OpType:
     apply: ApplyFn
     help: str = ""
     randomizable: bool = False       # has a 'seed' param worth re-rolling
+    whole_file: bool = False         # BYTE op needs the whole buffer, not a region
 
     def default_params(self) -> dict:
         return {p.key: p.default for p in self.params}
@@ -121,6 +122,7 @@ def register_op(
     params: tuple[ParamSpec, ...] = (),
     help: str = "",
     randomizable: bool = False,
+    whole_file: bool = False,
 ) -> Callable[[ApplyFn], ApplyFn]:
     """Decorator registering an op's apply function as a new :class:`OpType`."""
     def deco(fn: ApplyFn) -> ApplyFn:
@@ -129,6 +131,7 @@ def register_op(
         OP_REGISTRY[type_id] = OpType(
             type_id=type_id, label=label, domain=domain, category=category,
             params=tuple(params), apply=fn, help=help, randomizable=randomizable,
+            whole_file=whole_file,
         )
         return fn
     return deco

@@ -119,7 +119,10 @@ class RenderEngine:
             if cached is not None:
                 data = cached  # type: ignore[assignment]
                 continue
-            start, end = resolve_region(op, src.fmt, data)
+            if op.optype.whole_file:
+                start, end = 0, len(data)
+            else:
+                start, end = resolve_region(op, src.fmt, data)
             region = bytearray(data[start:end])
             ctx = ByteContext(
                 rng=self._rng_for(op, doc_seed), fmt=src.fmt,

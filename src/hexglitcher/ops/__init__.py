@@ -17,6 +17,7 @@ def register_builtin_ops() -> None:
     from . import byte_ops  # noqa: F401
     from . import audio_ops  # noqa: F401
     from . import inject_ops  # noqa: F401
+    from . import format_ops  # noqa: F401
     from . import pixel_ops  # noqa: F401
     _REGISTERED = True
 

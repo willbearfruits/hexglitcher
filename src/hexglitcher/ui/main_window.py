@@ -16,7 +16,10 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMenu,
     QMessageBox,
+    QProgressDialog,
+    QSlider,
     QSplitter,
+    QToolBar,
     QToolButton,
     QWidget,
     QVBoxLayout,
@@ -31,7 +34,10 @@ from .layers_panel import LayersPanel
 from .params_panel import ParamsPanel
 from .stack_panel import StackPanel
 
-_OPEN_FILTER = "Images (*.jpg *.jpeg *.png *.bmp *.gif *.tif *.tiff *.webp);;All files (*)"
+_OPEN_FILTER = (
+    "Media (*.jpg *.jpeg *.png *.bmp *.gif *.tif *.tiff *.webp "
+    "*.mp4 *.mov *.avi *.mkv *.webm *.glitch);;All files (*)"
+)
 
 
 class MainWindow(QMainWindow):
@@ -52,6 +58,7 @@ class MainWindow(QMainWindow):
         self._build_docks()
         self._build_actions()
         self._build_status()
+        self._build_transport()
         self._setup_timers()
         self._update_actions_enabled()
 
@@ -121,6 +128,7 @@ class MainWindow(QMainWindow):
         self._a_export = act("Export", self.export_image, "Ctrl+E", "Export the result image")
         self._a_gif = act("Export GIF", self.export_gif, None, "Export a seed-sweep animation")
         self._a_save = act("Save .glitch", self.save_project, "Ctrl+S", "Save project (re-editable)")
+        self._a_expvid = act("Export Video", self.export_video_action, None, "Render the glitched video (MP4)")
         tb.addSeparator()
         self._a_undo = act("↶ Undo", self.undo, "Ctrl+Z")
         self._a_redo = act("↷ Redo", self.redo, "Ctrl+Y")
@@ -149,6 +157,62 @@ class MainWindow(QMainWindow):
         self.statusBar().addPermanentWidget(self._sb_render)
         self.statusBar().addPermanentWidget(self._sb_zoom)
 
+    # ── video transport ──────────────────────────────────────────────────────
+    def _build_transport(self) -> None:
+        self._video_fps_val = 24.0
+        self._transport = QToolBar("Transport", self)
+        self._transport.setMovable(False)
+        self.addToolBar(Qt.ToolBarArea.BottomToolBarArea, self._transport)
+        self._play_btn = QToolButton()
+        self._play_btn.setText("▶")
+        self._play_btn.setCheckable(True)
+        self._play_btn.toggled.connect(self._toggle_play)
+        self._transport.addWidget(self._play_btn)
+        self._frame_slider = QSlider(Qt.Orientation.Horizontal)
+        self._frame_slider.setMinimumWidth(320)
+        self._frame_slider.valueChanged.connect(self._on_frame_changed)
+        self._transport.addWidget(self._frame_slider)
+        self._frame_lbl = QLabel("0 / 0")
+        self._transport.addWidget(self._frame_lbl)
+        self._play_timer = QTimer(self)
+        self._play_timer.timeout.connect(self._advance_frame)
+        self._transport.setVisible(False)
+
+    def _setup_transport_for(self, doc: Document) -> None:
+        if self._play_btn.isChecked():
+            self._play_btn.setChecked(False)
+        is_vid = doc.is_video()
+        self._transport.setVisible(is_vid)
+        if is_vid:
+            n = doc.frame_count()
+            doc.frame = 0
+            self._frame_slider.blockSignals(True)
+            self._frame_slider.setRange(0, max(0, n - 1))
+            self._frame_slider.setValue(0)
+            self._frame_slider.blockSignals(False)
+            self._frame_lbl.setText(f"0 / {max(0, n - 1)}")
+
+    def _on_frame_changed(self, i: int) -> None:
+        if self.doc is None:
+            return
+        self.doc.frame = int(i)
+        self._frame_lbl.setText(f"{i} / {max(0, self.doc.frame_count() - 1)}")
+        self._render(proxy=True)
+
+    def _toggle_play(self, on: bool) -> None:
+        if on and self.doc is not None and self.doc.is_video():
+            self._play_btn.setText("⏸")
+            self._play_timer.start(int(1000 / max(1.0, self._video_fps_val)))
+        else:
+            self._play_btn.setText("▶")
+            self._play_timer.stop()
+
+    def _advance_frame(self) -> None:
+        if self.doc is None:
+            return
+        n = self.doc.frame_count()
+        self._frame_slider.setValue((self.doc.frame + 1) % max(1, n))
+
     def _setup_timers(self) -> None:
         self._proxy_timer = QTimer(self)
         self._proxy_timer.setSingleShot(True)
@@ -168,6 +232,19 @@ class MainWindow(QMainWindow):
     def load_path(self, path: str) -> None:
         if path.lower().endswith(".glitch"):
             self.load_project(path)
+            return
+        from ..engine.video import SourceVideo, is_video
+        if is_video(path):
+            try:
+                vid = SourceVideo.from_file(path)
+            except Exception as e:
+                QMessageBox.critical(self, "Open failed", str(e))
+                return
+            if vid.read_rgb(0) is None:
+                QMessageBox.warning(self, "Unsupported", "Could not read that video.")
+                return
+            self._video_fps_val = vid.fps
+            self._install_document(Document.from_video(vid))
             return
         try:
             src = SourceImage.from_file(path)
@@ -193,8 +270,10 @@ class MainWindow(QMainWindow):
         self.params.set_operation(None)
         self._undo = [copy.deepcopy(doc.layers)]
         self._redo = []
+        self._setup_transport_for(doc)
         w, h = doc.canvas_size()
-        self._sb_info.setText(f"{doc.name}  ·  {w}×{h}  ·  {len(doc.layers)} layer(s)")
+        kind = f"video · {doc.frame_count()}f" if doc.is_video() else f"{len(doc.layers)} layer(s)"
+        self._sb_info.setText(f"{doc.name}  ·  {w}×{h}  ·  {kind}")
         self._update_actions_enabled()
         self._render(proxy=False)
 
@@ -236,6 +315,42 @@ class MainWindow(QMainWindow):
             self._sb_render.setText(f"exported {n}-frame GIF")
         except Exception as e:
             QMessageBox.critical(self, "Export failed", str(e))
+
+    def export_video_action(self) -> None:
+        if self.doc is None or not self.doc.is_video():
+            return
+        path, _ = QFileDialog.getSaveFileName(self, "Export Video", "glitched.mp4", "MP4 (*.mp4)")
+        if not path:
+            return
+        from ..engine.video import SourceVideo
+        from ..io.export import export_video
+        if self._play_btn.isChecked():
+            self._play_btn.setChecked(False)
+        n = self.doc.frame_count()
+        dlg = QProgressDialog("Rendering glitched video…", "Cancel", 0, n, self)
+        dlg.setWindowModality(Qt.WindowModality.WindowModal)
+        dlg.setMinimumDuration(0)
+        dlg.setValue(0)
+        state = {"cancel": False}
+
+        def prog(i, total):
+            dlg.setValue(i)
+            QApplication.processEvents()
+            if dlg.wasCanceled():
+                state["cancel"] = True
+                raise RuntimeError("cancelled")
+
+        audio = next((s.path for s in self.doc.sources.values()
+                      if isinstance(s, SourceVideo)), None)
+        try:
+            cnt = export_video(self.doc, path, fps=self._video_fps_val,
+                               audio_from=audio, progress=prog)
+            self._sb_render.setText(f"exported {cnt}-frame video")
+        except Exception as e:
+            if not state["cancel"]:
+                QMessageBox.critical(self, "Export failed", str(e))
+        finally:
+            dlg.close()
 
     # ── render controller ────────────────────────────────────────────────────
     def _schedule(self) -> None:
@@ -349,6 +464,7 @@ class MainWindow(QMainWindow):
         has = self.doc is not None
         for a in (self._a_export, self._a_surprise, self._a_save, self._a_gif, self._looks_btn):
             a.setEnabled(has)
+        self._a_expvid.setEnabled(has and self.doc.is_video())
         self._a_undo.setEnabled(has and len(self._undo) >= 2)
         self._a_redo.setEnabled(has and bool(self._redo))
 

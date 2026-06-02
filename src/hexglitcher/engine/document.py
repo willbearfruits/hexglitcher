@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from .layer import Layer, SourceImage
+from .video import SourceVideo
 
 
 @dataclass
@@ -18,6 +19,7 @@ class Document:
     sources: dict[str, SourceImage] = field(default_factory=dict)
     layers: list[Layer] = field(default_factory=list)   # bottom → top
     seed: int = 0
+    frame: int = 0                                       # current frame (video docs)
     name: str = "Untitled"
     uid: str = field(default_factory=lambda: uuid.uuid4().hex)
 
@@ -28,15 +30,35 @@ class Document:
         doc.layers.append(Layer(source_id=src.uid, locked=True, name="Original"))
         return doc
 
+    @classmethod
+    def from_video(cls, vid: SourceVideo) -> "Document":
+        doc = cls(sources={vid.uid: vid}, name=vid.name)
+        doc.layers.append(Layer(source_id=vid.uid, locked=True, name="Original"))
+        return doc
+
     def add_source(self, src: SourceImage) -> str:
         self.sources[src.uid] = src
         return src.uid
+
+    def resolve_source(self, source_id: str, frame: Optional[int] = None) -> Optional[SourceImage]:
+        """Get a source's SourceImage, materializing the current video frame."""
+        s = self.sources.get(source_id)
+        if isinstance(s, SourceVideo):
+            return s.frame_source(self.frame if frame is None else frame)
+        return s
+
+    def frame_count(self) -> int:
+        counts = [s.frame_count for s in self.sources.values() if isinstance(s, SourceVideo)]
+        return max(counts) if counts else 1
+
+    def is_video(self) -> bool:
+        return any(isinstance(s, SourceVideo) for s in self.sources.values())
 
     @property
     def base_source(self) -> Optional[SourceImage]:
         if not self.layers:
             return None
-        return self.sources.get(self.layers[0].source_id)
+        return self.resolve_source(self.layers[0].source_id)
 
     def canvas_size(self) -> tuple[int, int]:
         """(width, height) taken from the base layer's clean decode."""
@@ -78,7 +100,8 @@ class Document:
         large byte buffers, and their content hashes stay cache-stable.
         """
         import copy
-        new = Document(sources=self.sources, seed=self.seed, name=self.name, uid=self.uid)
+        new = Document(sources=self.sources, seed=self.seed, frame=self.frame,
+                       name=self.name, uid=self.uid)
         new.layers = copy.deepcopy(self.layers)
         return new
 

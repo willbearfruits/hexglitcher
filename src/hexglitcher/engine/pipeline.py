@@ -199,7 +199,9 @@ class RenderEngine:
 
     def render_layer(self, doc: Document, layer: Layer, target: tuple[int, int],
                      max_dim: Optional[int]) -> tuple[np.ndarray, bool]:
-        src = doc.sources[layer.source_id]
+        src = doc.resolve_source(layer.source_id)
+        if src is None:
+            return np.zeros((target[1], target[0], 4), np.uint8), False
         data, byte_hash = self._byte_stage(src, layer, doc.seed)
         img, ok = self._decode_stage(data, byte_hash, src)
         # If byte corruption broke a brittle format, retry on a BMP rasterization

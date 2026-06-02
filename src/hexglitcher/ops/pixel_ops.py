@@ -8,7 +8,7 @@ from __future__ import annotations
 import numpy as np
 
 from ..engine.operation import OpDomain, register_op
-from .params import p_bool, p_choice, p_float, p_int
+from .params import p_bool, p_choice, p_float, p_int, p_seed
 
 CAT_CH = "Channels"
 CAT_SORT = "Sorting"
@@ -112,3 +112,58 @@ def _pixel_sort(img, params, ctx):
                 order = order[::-1]
             out[y, a:b] = work[y, a:b][order]
     return np.swapaxes(out, 0, 1) if vertical else out
+
+
+@register_op(
+    "pixel.row_shift", "Row / Column Shift", OpDomain.PIXEL, "Geometry",
+    params=(
+        p_choice("axis", "Axis", "rows", ("rows", "columns")),
+        p_choice("mode", "Mode", "sine", ("sine", "random")),
+        p_int("max_shift", "Max shift (px)", 30, 0, 4000, 1),
+        p_float("rate", "Cycles (sine)", 6.0, 0.1, 400.0, 0.1),
+        p_seed(),
+    ),
+    help="Displace each row (or column) sideways — wavy scanline / slice glitch.",
+    randomizable=True,
+)
+def _row_shift(img, params, ctx):
+    cols = params["axis"] == "columns"
+    work = np.swapaxes(img, 0, 1) if cols else img
+    h = work.shape[0]
+    m = int(params["max_shift"])
+    if m <= 0:
+        return img
+    if params["mode"] == "sine":
+        shifts = (m * np.sin(2 * np.pi * float(params["rate"]) * np.arange(h) / max(1, h))).astype(int)
+    else:
+        shifts = ctx.rng.integers(-m, m + 1, size=h)
+    out = work.copy()
+    for y in range(h):
+        s = int(shifts[y])
+        if s:
+            out[y] = np.roll(work[y], s, axis=0)
+    return np.swapaxes(out, 0, 1) if cols else out
+
+
+@register_op(
+    "pixel.noise", "Noise Overlay", OpDomain.PIXEL, "Texture",
+    params=(
+        p_int("amount", "Amount", 40, 0, 255, 1),
+        p_bool("mono", "Monochrome", True),
+        p_seed(),
+    ),
+    help="Add random noise over the pixels.",
+    randomizable=True,
+)
+def _pixel_noise(img, params, ctx):
+    a = int(params["amount"])
+    if a <= 0:
+        return img
+    h, w = img.shape[:2]
+    if params["mono"]:
+        n = np.repeat(ctx.rng.integers(-a, a + 1, size=(h, w, 1)), 3, axis=2)
+    else:
+        n = ctx.rng.integers(-a, a + 1, size=(h, w, 3))
+    out = img.astype(np.int16)
+    out[..., :3] = np.clip(out[..., :3] + n, 0, 255)
+    return out.astype(np.uint8)

@@ -28,3 +28,7 @@ def p_seed(key="seed", label="Seed", default=0, help="Fixed seed for reproducibl
 
 def p_filepath(key, label, default="", help="") -> ParamSpec:
     return ParamSpec(key, label, "filepath", default, None, None, None, None, help)
+
+
+def p_text(key, label, default="", help="") -> ParamSpec:
+    return ParamSpec(key, label, "text", default, None, None, None, None, help)

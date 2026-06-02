@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 
 from ..engine.operation import OpDomain, register_op
-from .params import p_choice, p_int, p_seed
+from .params import p_choice, p_int, p_seed, p_text
 
 CAT = "Corruption"
 
@@ -132,3 +132,28 @@ def _repeat(region, params, ctx):
         if pos >= n:
             break
     return bytes(arr)
+
+
+@register_op(
+    "byte.find_replace", "Find / Replace (Hex)", OpDomain.BYTE, CAT,
+    params=(
+        p_text("find", "Find (hex)", "FF", "Byte pattern to find, e.g. FF00"),
+        p_text("replace", "Replace (hex)", "00", "Replacement bytes, e.g. 0000"),
+        p_int("max", "Max replacements (0 = all)", 0, 0, 1_000_000, 1),
+    ),
+    help="Replace a hex byte pattern with another — the structured 'wordpad "
+         "effect'. More deliberate than random corruption.",
+)
+def _find_replace(region, params, ctx):
+    find = (params.get("find") or "").replace(" ", "")
+    repl = (params.get("replace") or "").replace(" ", "")
+    try:
+        fb = bytes.fromhex(find)
+        rb = bytes.fromhex(repl)
+    except ValueError:
+        return None
+    if not fb:
+        return None
+    data = bytes(region)
+    mx = int(params["max"])
+    return data.replace(fb, rb) if mx <= 0 else data.replace(fb, rb, mx)

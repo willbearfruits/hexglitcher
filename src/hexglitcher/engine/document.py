@@ -70,6 +70,18 @@ class Document:
         if not self.layers[index].locked:
             self.layers.pop(index)
 
+    def snapshot(self) -> "Document":
+        """A copy safe to hand to the render thread.
+
+        Layers/ops are deep-copied (small, and they mutate as the user edits);
+        the immutable source images are shared by reference so we never copy
+        large byte buffers, and their content hashes stay cache-stable.
+        """
+        import copy
+        new = Document(sources=self.sources, seed=self.seed, name=self.name, uid=self.uid)
+        new.layers = copy.deepcopy(self.layers)
+        return new
+
     # serialization ----------------------------------------------------------
     def to_dict(self, embed_sources: bool = False) -> dict:
         import base64

@@ -4,73 +4,63 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-HexGlitcher v2.0 is a single-file Tkinter desktop app (`main.py`, ~2000 lines) for image **databending** — corrupting raw bytes to make glitch art while keeping a file's header intact so it still decodes. Pure-Python `bytearray` manipulation does all the work; Pillow only *decodes bytes for on-screen preview* and never writes back (this invariant is stated in the module docstring — preserve it).
+HexGlitcher **v3** is a PySide6 desktop app for image **databending** — non-destructive, layered, realtime glitch art. It's a ground-up rewrite of the v2 single-file Tkinter app and lives as a package under `src/hexglitcher/`.
+
+> The repo root still contains the **legacy v2** single-file app (`main.py`, `build.py`, `hexglitcher.spec`, `requirements.txt`). v3 supersedes it; those files will be removed when `v3` merges to `master`. Don't extend v2 — all new work goes in `src/hexglitcher/`.
 
 ## Commands
 
 ```bash
-python3 main.py                      # run (GUI, needs a display)
-pip install -r requirements.txt      # runtime dep: Pillow only (Tkinter ships with Python)
-pip install -r requirements-build.txt
-python3 build.py                     # build platform executable into dist/
+# Run (GUI, needs a display). PySide6/numpy/Pillow/opencv must be installed.
+PYTHONPATH=src python3 -m hexglitcher [image]
+# or: pip install -e .  then  hexglitcher
+
+# Tests (headless, no Qt) — fast
+PYTHONPATH=src python3 -m pytest tests/test_v3.py -q
+PYTHONPATH=src python3 tests/smoke_engine.py        # engine end-to-end on real images
+QT_QPA_PLATFORM=offscreen PYTHONPATH=src python3 tests/smoke_ui.py   # UI wiring, headless
+
+# Compile check
+python3 -m compileall -q src
 ```
 
-**No test suite.** Validate by running the app, or syntax-check headlessly:
-```bash
-python3 -c "import ast; ast.parse(open('main.py').read()); print('OK')"
-```
-`test_images/` holds 26 fixtures across 16 formats for manual testing.
+Deps are in `pyproject.toml`. OpenCV (`cv2`) is used for fast/tolerant decode and BMP re-encode; if absent the engine falls back to Pillow.
 
 ## Architecture
 
-One file, several classes. `GlitchApp` is the controller; the rest are widgets/data:
+Two halves: a **Qt-free engine** (`engine/`, `formats/`, `ops/`, `io/`, `presets/`) and the **Qt UI** (`ui/`, `render/`). The engine is fully testable headless.
 
-- **`GlitchApp`** — owns state, builds the UI, dispatches operations.
-- **`HexViewerFrame`** — paginated `offset | hex | ASCII` dump; highlights changed bytes vs original.
-- **`IterationStrip`** — horizontal strip of saved-state thumbnails (the GIF-frame source).
-- **`ExportGifDialog`** — assembles an animated GIF from saved states.
-- **`@dataclass HistoryEntry`** — one undo/redo unit (see below). **`@dataclass SavedState`** — a snapshot for the strip.
-- Module helpers: `_get_log_path()`, `_safe_thumbnail()` (decode→thumbnail, `None` if corrupt), `_count_diff()`.
+### Data model
+`Document` → ordered list of compositing **`Layer`s** (bottom→top) → each layer references a `SourceImage` and carries a non-destructive **op-stack**. Layer 0 is the locked "Original". Sources are immutable; the document is a *recipe* applied on demand. `Document.snapshot()` deep-copies layers/ops (sharing immutable sources) for safe hand-off to the render thread.
 
-### Data model — the load-bearing concept
+### Two op domains, one decode boundary
+Operations (`engine/operation.py`) are `BYTE` (mangle raw file bytes, pre-decode) or `PIXEL` (transform the decoded RGBA image, post-decode). The pipeline renders each layer as:
 
-Two buffers: `original_data` (immutable after load) and `glitched_data` (the working buffer). **Operations mutate `glitched_data` in place and therefore STACK** — apply twice and the second builds on the first. (This is the key behavior change from v1.0, which recomputed from the original each time; do not reintroduce that assumption.)
+```
+source bytes ─[BYTE ops]→ corrupted bytes ─[DECODE]→ RGBA ─[PIXEL ops]→ buffer → composite
+```
 
-Glitching is confined to a **region**, not just a protected header: `region_start`/`region_end` IntVars define the editable window (`end == 0` means EOF). `header_size` is just a default that seeds `region_start` on load. `_get_region_bounds()` resolves the active `(start, end)`. On load, `FORMAT_HEADER_SIZES` picks a sensible default header per extension (jpg 600, png 33, bmp 54, gif 13, raw/bin 0, …).
+### The pipeline (`engine/pipeline.py`) — read this first
+- **Prefix cache** (darktable-style): each op folds its identity into a running hash (`engine/hashing.py`); the output *after* it is cached. Editing op *i* recomputes only *i…N*; a PIXEL-op edit reuses the cached decode. Bounded LRU.
+- **Decode is never fatal** (`engine/decode.py`): a failed decode returns `None` and the layer falls back to its clean original (`ok=False`).
+- **Auto-rasterize fallback** (non-obvious, important): byte corruption breaks brittle formats (PNG/WebP/GIF) → decode fails → the engine *re-runs the byte stage on a BMP re-encoding* of the source so the glitch stays visible. This is why byte/audio ops "work" on PNG. Implemented in `RenderEngine.render_layer` / `_rasterized_source`.
+- **Proxy vs full**: `render(doc, max_dim=N)` downscales the decode for fast interactive previews; `max_dim=None` is full res. Compositing is bottom-up alpha+blend (`engine/blend.py`).
 
-### The central chokepoint: `_record_and_apply(description, fn)`
+### Adding an operation (the common task)
+Write a function decorated with `@register_op(type_id, label, domain, category, params=(...))` in an `ops/*.py` module and import that module in `ops/__init__.py:register_builtin_ops()`. That's it — the op auto-appears in the palette and the params panel **auto-generates widgets from its `ParamSpec`s**. BYTE signature `fn(region: bytearray, params, ctx: ByteContext) -> bytes|None`; PIXEL signature `fn(img: ndarray HxWx4, params, ctx: PixelContext) -> ndarray`. Set `whole_file=True` for structural BYTE ops that need the entire buffer (e.g. `png.filter_rewrite`, `jpeg.*`) instead of a region. Randomized ops should read `ctx.rng` (seeded from a `seed` param or the doc seed).
 
-**Almost every operation routes through this method.** It slices the region out of `glitched_data`, hands the bytes to `fn(region: bytearray) -> Optional[bytearray]` (mutate in place and return `None`, or return a new/resized buffer), splices the result back, and pushes a `HistoryEntry`. **When adding a new glitch, write an `fn` and pass it here** — you get undo/redo, diff counting, and region handling for free. Length-changing results are spliced correctly.
+### Format backends (`formats/`)
+`detect_format(bytes, ext)` → a `FormatBackend` whose `safe_zone(data)` returns the corruptible `(header_end, footer_start)` body (JPEG-after-SOS, PNG IHDR/IEND, BMP-54, GIF GCT-aware). Region-based byte ops default to this safe zone. `formats/png.py` has the chunk reader/writer used by the PNG filter-rewrite op (decompress → edit filtered stream → recompress → fix CRC).
 
-Two operations bypass it and record history manually because they touch two regions or change length: Block's `Swap/Copy/XOR-blend A↔B`, and `Inject/Insert`. Match that pattern only when you genuinely can't express the change as a single-region `fn`.
+### UI (`ui/`, `render/`)
+- `render/worker.py`: a `RenderWorker` QObject on a `QThread`, **latest-wins** single request slot (no FIFO of slider positions), results via queued `previewReady(QImage, rid, ok)`. Never touch GUI off-thread.
+- `ui/main_window.py`: debounced render controller (proxy on change ~45 ms, full-res on idle ~280 ms), docks, toolbar, undo/redo (deep-copied layer-state history), open/`.glitch`/export/GIF, Surprise + Looks, hold-`\` compare.
+- `ui/params_panel.py` builds widgets from `ParamSpec` (int/float→slider+spinbox, choice→combo, bool→checkbox, text/filepath→lineedit).
 
-### Operations — 5 notebook tabs
+### Persistence & export (`io/`, `presets/`)
+`io/recipe.py` saves/loads the whole document as a self-contained `.glitch` JSON (layers + ops + base64 sources). `io/export.py` exports a flattened image or a seed-sweep animated GIF. `presets/` has `apply_surprise` and named `LOOKS`.
 
-`apply_operation()` reads the selected tab index and calls `[_op_random, _op_find_replace, _op_block, _op_arithmetic, _op_inject][idx]`. Tab order is load-bearing — it's mirrored in several `["Random","Find/Replace","Block","Arithmetic","Inject"]` lists (batch labels, `save_state`). Keep them in sync.
-
-- **Random** — per-byte Random/Increment/Decrement/Zero/Max/XOR/AND/OR/Shift/Rotate; either `intensity` (1 byte per N) or step-every-N; hex mask for bitwise modes.
-- **Find/Replace** — Exact, `Wildcard ??` (byte-wise pattern match), and threshold modes (Greater Than / Less Than / Range) that replace matching byte values; `max_replacements` cap.
-- **Block** — Reverse, Sort ↑/↓, Shuffle, Step-Skip, and the two-region Swap/Copy/XOR-blend.
-- **Arithmetic** — Add/Subtract/Multiply with Wrap or Clamp overflow; optional channel stride (`start`/`step`) to hit one interleaved channel.
-- **Inject** — Overwrite-tile, XOR-tile, and Insert (length-changing).
-
-`_apply_seed()` re-seeds the `random` module from a fixed value when seed mode is "Fixed" — call it at the top of any new randomized op so results are reproducible.
-
-### Undo/redo — range diffs, not snapshots
-
-`HistoryEntry` stores only the changed byte range (`range_start`, `range_old`, `range_new`), so history is cheap even on large files. `_history` is a `deque(maxlen=HISTORY_MAX=50)`; `_redo_stack` is cleared on every new op. `undo()`/`redo()` splice the stored range back and handle length changes. The History list and IterationStrip are distinct: history = reversible op log; strip = manually saved checkpoints for comparison and GIF export.
-
-### Batch — main-thread work, worker only ticks
-
-`run_batch()` repeats the current tab's op N times (1–100). **Tkinter is single-threaded**, so the actual `apply_operation()` calls run on the main thread inside a `root.after()` poll loop; the worker thread only enqueues tick messages onto `_batch_queue`. `_batch_cancel` (an `Event`) stops it. Don't move byte-mutating or UI work onto the worker thread.
-
-### Other constraints
-
-- **Whole-region ops** (sort/reverse/shuffle/threshold/arithmetic-over-all) are O(n) Python loops/copies — with the region set to EOF on a large file they can briefly freeze the UI. Acceptable, but don't make it worse.
-- **Logging** goes to a platform user dir via `_get_log_path()` (`%APPDATA%` / `~/Library/Logs` / `$XDG_STATE_HOME`), **not** the CWD — required because PyInstaller/AppImage may run from a read-only directory. A stray `hexglitcher.log` in the repo root is a v1.0 leftover, not the live log.
-- `Image.MAX_IMAGE_PIXELS = 50_000_000` guards against decompression-bomb previews.
-- Saving writes raw bytes (no re-encode): `save_image()` (warns before overwriting the source) and `save_next_version()` (appends `_v1`, `_v2`, …).
-
-## Releases
-
-Pushing a `v*` tag triggers `.github/workflows/build-release.yml`, which builds Windows/Linux/macOS via `build.py` and publishes a GitHub Release using `.github/RELEASE_NOTES.md` as the body. Bump `CFBundleShortVersionString` in `hexglitcher.spec` and the README changelog before tagging.
+## Conventions
+- Engine code stays Qt-free (so tests run headless and the engine is reusable).
+- Don't claim a GUI build/packaging works unless it was actually run — packaging a PySide6+cv2 app (AppImage etc.) is not verified in CI yet.
+- `git` lives on branch `v3`; `master` holds the shippable v2.0. Two remotes: `origin` (GitHub, canonical) + `gitea`.

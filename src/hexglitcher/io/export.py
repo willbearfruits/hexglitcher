@@ -28,3 +28,27 @@ def export_document(doc: Document, path: str, quality: int = 92) -> None:
         im.save(path, quality=quality)
     else:
         im.save(path)
+
+
+def export_animation(doc: Document, path: str, frames: int = 16, fps: int = 12) -> int:
+    """Sweep the document seed across `frames` renders and save an animated GIF.
+
+    The seed feeds every randomized op, so a sweep walks through related-but-
+    different glitches — a moving, evolving version of the current stack.
+    Returns the number of frames written.
+    """
+    eng = RenderEngine()
+    base_seed = doc.seed
+    imgs = []
+    for i in range(max(1, frames)):
+        snap = doc.snapshot()
+        snap.seed = base_seed + i
+        rgba, _ = eng.render(snap)
+        if rgba is not None:
+            imgs.append(Image.fromarray(rgba).convert("RGB"))
+    if not imgs:
+        raise RuntimeError("Nothing to export (no decodable image).")
+    duration = max(20, int(1000 / max(1, fps)))
+    imgs[0].save(path, save_all=True, append_images=imgs[1:],
+                 duration=duration, loop=0, optimize=False, format="GIF")
+    return len(imgs)

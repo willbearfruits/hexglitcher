@@ -82,6 +82,19 @@ class Document:
         new.layers = copy.deepcopy(self.layers)
         return new
 
+    @classmethod
+    def from_dict(cls, d: dict) -> "Document":
+        import base64
+        sources: dict[str, SourceImage] = {}
+        for sid, entry in d.get("sources", {}).items():
+            data = base64.b64decode(entry["data_b64"]) if "data_b64" in entry else b""
+            src = SourceImage(data=data, ext=entry.get("ext", ""), name=entry.get("name", "image"))
+            src.uid = sid
+            sources[sid] = src
+        doc = cls(sources=sources, seed=int(d.get("seed", 0)), name=d.get("name", "Untitled"))
+        doc.layers = [Layer.from_dict(l) for l in d.get("layers", [])]
+        return doc
+
     # serialization ----------------------------------------------------------
     def to_dict(self, embed_sources: bool = False) -> dict:
         import base64

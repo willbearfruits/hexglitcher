@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QDockWidget,
     QFileDialog,
+    QInputDialog,
     QLabel,
     QMainWindow,
     QMessageBox,
@@ -115,7 +116,9 @@ class MainWindow(QMainWindow):
             return a
 
         self._a_open = act("Open", self.open_image, "Ctrl+O", "Open an image")
-        self._a_export = act("Export", self.export_image, "Ctrl+E", "Export the result")
+        self._a_export = act("Export", self.export_image, "Ctrl+E", "Export the result image")
+        self._a_gif = act("Export GIF", self.export_gif, None, "Export a seed-sweep animation")
+        self._a_save = act("Save .glitch", self.save_project, "Ctrl+S", "Save project (re-editable)")
         tb.addSeparator()
         self._a_undo = act("↶ Undo", self.undo, "Ctrl+Z")
         self._a_redo = act("↷ Redo", self.redo, "Ctrl+Y")
@@ -150,6 +153,9 @@ class MainWindow(QMainWindow):
             self.load_path(path)
 
     def load_path(self, path: str) -> None:
+        if path.lower().endswith(".glitch"):
+            self.load_project(path)
+            return
         try:
             src = SourceImage.from_file(path)
         except Exception as e:
@@ -158,21 +164,65 @@ class MainWindow(QMainWindow):
         if src.clean_decoded() is None:
             QMessageBox.warning(self, "Unsupported", "Could not decode that image.")
             return
+        self._install_document(Document.from_source(src))
+
+    def _install_document(self, doc: Document) -> None:
+        """Make `doc` the active document and refresh all panels + preview."""
         self._worker.clear_cache()
-        self.doc = Document.from_source(src)
-        # the un-glitched base, for hold-to-compare
-        clean = src.clean_decoded()
-        self.canvas.set_original(ndarray_to_qimage(clean))
+        self.doc = doc
+        base = doc.base_source
+        clean = base.clean_decoded() if base else None
+        self.canvas.set_original(ndarray_to_qimage(clean) if clean is not None else None)
         self.canvas._has_image = False  # force re-fit on first render
-        self.layers.set_document(self.doc)
-        self.stack.set_layer(self.doc.layers[self.layers.current_doc_index()] if self.doc.layers else None)
+        self.layers.set_document(doc)
+        idx = self.layers.current_doc_index()
+        self.stack.set_layer(doc.layers[idx] if 0 <= idx < len(doc.layers) else None)
         self.params.set_operation(None)
-        self._undo = [copy.deepcopy(self.doc.layers)]
+        self._undo = [copy.deepcopy(doc.layers)]
         self._redo = []
-        w, h = self.doc.canvas_size()
-        self._sb_info.setText(f"{src.name}  ·  {src.fmt.name.upper()}  ·  {w}×{h}  ·  {len(src.data):,} B")
+        w, h = doc.canvas_size()
+        self._sb_info.setText(f"{doc.name}  ·  {w}×{h}  ·  {len(doc.layers)} layer(s)")
         self._update_actions_enabled()
         self._render(proxy=False)
+
+    def load_project(self, path: str) -> None:
+        from ..io.recipe import load_project as _load
+        try:
+            doc = _load(path)
+        except Exception as e:
+            QMessageBox.critical(self, "Open failed", str(e))
+            return
+        self._install_document(doc)
+
+    def save_project(self) -> None:
+        if self.doc is None:
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save Project", "glitch.glitch", "HexGlitcher project (*.glitch)")
+        if not path:
+            return
+        from ..io.recipe import save_project
+        try:
+            save_project(self.doc, path)
+            self._sb_render.setText(f"saved {os.path.basename(path)}")
+        except Exception as e:
+            QMessageBox.critical(self, "Save failed", str(e))
+
+    def export_gif(self) -> None:
+        if self.doc is None:
+            return
+        frames, ok = QInputDialog.getInt(self, "Export GIF", "Frames (seed sweep):", 16, 2, 240)
+        if not ok:
+            return
+        path, _ = QFileDialog.getSaveFileName(self, "Export GIF", "glitch.gif", "GIF (*.gif)")
+        if not path:
+            return
+        from ..io.export import export_animation
+        try:
+            n = export_animation(self.doc, path, frames=frames)
+            self._sb_render.setText(f"exported {n}-frame GIF")
+        except Exception as e:
+            QMessageBox.critical(self, "Export failed", str(e))
 
     # ── render controller ────────────────────────────────────────────────────
     def _schedule(self) -> None:
@@ -276,7 +326,7 @@ class MainWindow(QMainWindow):
 
     def _update_actions_enabled(self) -> None:
         has = self.doc is not None
-        for a in (self._a_export, self._a_surprise):
+        for a in (self._a_export, self._a_surprise, self._a_save, self._a_gif):
             a.setEnabled(has)
         self._a_undo.setEnabled(has and len(self._undo) >= 2)
         self._a_redo.setEnabled(has and bool(self._redo))

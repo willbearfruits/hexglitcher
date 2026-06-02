@@ -14,8 +14,10 @@ from PySide6.QtWidgets import (
     QInputDialog,
     QLabel,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QSplitter,
+    QToolButton,
     QWidget,
     QVBoxLayout,
 )
@@ -124,6 +126,17 @@ class MainWindow(QMainWindow):
         self._a_redo = act("↷ Redo", self.redo, "Ctrl+Y")
         tb.addSeparator()
         self._a_surprise = act("🎲 Surprise", self.surprise_me, "Ctrl+R", "Random glitch stack")
+        # Looks menu (curated preset stacks)
+        from .. import presets
+        self._looks_btn = QToolButton()
+        self._looks_btn.setText("✨ Looks")
+        self._looks_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        looks_menu = QMenu(self._looks_btn)
+        for name in presets.look_names():
+            a = looks_menu.addAction(name)
+            a.triggered.connect(lambda checked=False, n=name: self._apply_look(n))
+        self._looks_btn.setMenu(looks_menu)
+        tb.addWidget(self._looks_btn)
         tb.addSeparator()
         act("Fit", self.canvas.fit, "Ctrl+0", "Fit to window")
         act("100%", self.canvas.actual_size, "Ctrl+1", "Actual size")
@@ -309,6 +322,14 @@ class MainWindow(QMainWindow):
         self._refresh_after_state_change()
         self._push_history()
 
+    def _apply_look(self, name: str) -> None:
+        if self.doc is None:
+            return
+        from .. import presets
+        presets.apply_look(self.doc, name)
+        self._refresh_after_state_change()
+        self._push_history()
+
     def export_image(self) -> None:
         if self.doc is None:
             return
@@ -326,7 +347,7 @@ class MainWindow(QMainWindow):
 
     def _update_actions_enabled(self) -> None:
         has = self.doc is not None
-        for a in (self._a_export, self._a_surprise, self._a_save, self._a_gif):
+        for a in (self._a_export, self._a_surprise, self._a_save, self._a_gif, self._looks_btn):
             a.setEnabled(has)
         self._a_undo.setEnabled(has and len(self._undo) >= 2)
         self._a_redo.setEnabled(has and bool(self._redo))

@@ -51,3 +51,54 @@ def apply_surprise(doc: Document) -> None:
     ops = [_make_op(t) for t in _rng.sample(CURATED_BYTE, _rng.randint(1, 2))]
     ops += [_make_op(t) for t in _rng.sample(CURATED_PIXEL, _rng.randint(1, 2))]
     glitch.ops = ops
+
+
+# ── Named "Looks": curated stacks that populate the document in one click ──────
+# Each value: dict(blend, opacity, ops=[(type_id, params), ...]).
+LOOKS: dict[str, dict] = {
+    "Chromatic Drift": {"blend": "normal", "opacity": 1.0, "ops": [
+        ("pixel.channel_shift", {"shift_r": 14, "shift_b": -14}),
+        ("pixel.sort", {"direction": "horizontal", "low": 0.3, "high": 0.85}),
+    ]},
+    "Scanline Ghost": {"blend": "screen", "opacity": 0.9, "ops": [
+        ("pixel.row_shift", {"axis": "rows", "mode": "sine", "max_shift": 22, "rate": 60.0}),
+        ("pixel.noise", {"amount": 18, "mono": True}),
+        ("pixel.channel_shift", {"shift_r": 6, "shift_b": -6}),
+    ]},
+    "JPEG Rot": {"blend": "normal", "opacity": 1.0, "ops": [
+        ("jpeg.recompress", {"quality": 8, "iterations": 8}),
+        ("byte.noise", {"amount": 22, "mode": "random", "seed": 1}),
+    ]},
+    "Datamosh": {"blend": "normal", "opacity": 1.0, "ops": [
+        ("byte.shift", {"offset": 5}),
+        ("byte.transpose", {"chunks": 12, "seed": 2}),
+        ("pixel.channel_shift", {"shift_r": 10, "shift_b": -8}),
+    ]},
+    "Plane Tear": {"blend": "difference", "opacity": 0.85, "ops": [
+        ("decoder.planar", {"shift": 5000}),
+        ("pixel.row_shift", {"axis": "rows", "mode": "random", "max_shift": 30, "seed": 7}),
+    ]},
+    "Wrong Width": {"blend": "normal", "opacity": 1.0, "ops": [
+        ("decoder.wrong_width", {"width_delta": 7, "channels": "3 (RGB)"}),
+        ("pixel.sort", {"direction": "vertical", "low": 0.2, "high": 0.9}),
+    ]},
+}
+
+
+def look_names() -> list[str]:
+    return list(LOOKS.keys())
+
+
+def apply_look(doc: Document, name: str) -> None:
+    """Replace glitch layers with one layer built from the named Look."""
+    register_builtin_ops()
+    spec = LOOKS.get(name)
+    if not spec:
+        return
+    doc.layers = [l for l in doc.layers if l.locked] or doc.layers[:1]
+    glitch = doc.duplicate_layer(0)
+    glitch.name = name
+    glitch.locked = False
+    glitch.blend = spec.get("blend", "normal")
+    glitch.opacity = float(spec.get("opacity", 1.0))
+    glitch.ops = [Operation(tid, dict(params)) for tid, params in spec["ops"]]

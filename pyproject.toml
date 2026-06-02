@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hexglitcher"
+version = "3.0.0a0"
+description = "Hex-level image databender — non-destructive, layered, realtime glitch art."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "willbearfruits" }]
+dependencies = [
+    "PySide6>=6.6",
+    "numpy>=1.24",
+    "Pillow>=10.0",
+    "opencv-python>=4.8",
+]
+
+[project.optional-dependencies]
+# Faster JPEG decode if libjpeg-turbo is available on the system.
+turbo = ["PyTurboJPEG>=2.0"]
+dev = ["pytest>=7", "pytest-qt>=4"]
+
+[project.scripts]
+hexglitcher = "hexglitcher.app:main"
+
+[project.gui-scripts]
+hexglitcher-gui = "hexglitcher.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+hexglitcher = ["resources/**/*", "presets/*.glitch"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

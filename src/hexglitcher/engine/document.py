@@ -1,0 +1,88 @@
+"""The Document: an ordered stack of compositing layers + a source registry.
+
+Layers are ordered bottom→top (index 0 is the base). A freshly opened image
+produces a document with a single locked "Original" layer; the user duplicates
+it and adds ops to the copy to "blend the original with the glitched version".
+"""
+from __future__ import annotations
+
+import uuid
+from dataclasses import dataclass, field
+from typing import Optional
+
+from .layer import Layer, SourceImage
+
+
+@dataclass
+class Document:
+    sources: dict[str, SourceImage] = field(default_factory=dict)
+    layers: list[Layer] = field(default_factory=list)   # bottom → top
+    seed: int = 0
+    name: str = "Untitled"
+    uid: str = field(default_factory=lambda: uuid.uuid4().hex)
+
+    # construction -----------------------------------------------------------
+    @classmethod
+    def from_source(cls, src: SourceImage) -> "Document":
+        doc = cls(sources={src.uid: src}, name=src.name)
+        doc.layers.append(Layer(source_id=src.uid, locked=True, name="Original"))
+        return doc
+
+    def add_source(self, src: SourceImage) -> str:
+        self.sources[src.uid] = src
+        return src.uid
+
+    @property
+    def base_source(self) -> Optional[SourceImage]:
+        if not self.layers:
+            return None
+        return self.sources.get(self.layers[0].source_id)
+
+    def canvas_size(self) -> tuple[int, int]:
+        """(width, height) taken from the base layer's clean decode."""
+        src = self.base_source
+        if src is not None:
+            clean = src.clean_decoded()
+            if clean is not None:
+                h, w = clean.shape[:2]
+                return (w, h)
+        return (0, 0)
+
+    # layer ops --------------------------------------------------------------
+    def duplicate_layer(self, index: int) -> Layer:
+        src_layer = self.layers[index]
+        new = Layer.from_dict(src_layer.to_dict())
+        new.uid = uuid.uuid4().hex
+        new.locked = False
+        new.name = f"{src_layer.name} copy"
+        for op in new.ops:
+            op.uid = uuid.uuid4().hex
+        self.layers.insert(index + 1, new)
+        return new
+
+    def move_layer(self, index: int, to: int) -> None:
+        if self.layers[index].locked and to == 0:
+            return
+        layer = self.layers.pop(index)
+        self.layers.insert(max(0, min(to, len(self.layers))), layer)
+
+    def remove_layer(self, index: int) -> None:
+        if not self.layers[index].locked:
+            self.layers.pop(index)
+
+    # serialization ----------------------------------------------------------
+    def to_dict(self, embed_sources: bool = False) -> dict:
+        import base64
+        srcs = {}
+        for sid, s in self.sources.items():
+            entry = {"ext": s.ext, "name": s.name}
+            if embed_sources:
+                entry["data_b64"] = base64.b64encode(s.data).decode("ascii")
+            srcs[sid] = entry
+        return {
+            "version": 3,
+            "name": self.name,
+            "seed": self.seed,
+            "sources": srcs,
+            "layers": [l.to_dict() for l in self.layers],
+        }

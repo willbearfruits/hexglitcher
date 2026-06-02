@@ -175,11 +175,42 @@ class RenderEngine:
             self._put(key, img)
         return img
 
+    def _rasterized_source(self, src: SourceImage) -> Optional[SourceImage]:
+        """A BMP re-encoding of a source's clean pixels (cached).
+
+        Generic byte corruption breaks brittle formats (PNG/WebP/GIF): the decode
+        fails and we'd otherwise show nothing. BMP corrupts visibly and almost never
+        fails to decode, so re-running the byte ops on a BMP keeps the glitch
+        visible — the 'convert to BMP first' databending rule, applied automatically.
+        """
+        key = "raster:" + src.content_hash
+        cached = self._get(key)
+        if cached is not None:
+            return cached or None
+        out: Optional[SourceImage] = None
+        clean = src.clean_decoded()
+        if clean is not None and cv2 is not None:
+            bgr = cv2.cvtColor(clean, cv2.COLOR_RGBA2BGR)
+            ok, enc = cv2.imencode(".bmp", bgr)
+            if ok:
+                out = SourceImage(data=enc.tobytes(), ext=".bmp", name=src.name)
+        self._put(key, out if out is not None else False)
+        return out
+
     def render_layer(self, doc: Document, layer: Layer, target: tuple[int, int],
                      max_dim: Optional[int]) -> tuple[np.ndarray, bool]:
         src = doc.sources[layer.source_id]
         data, byte_hash = self._byte_stage(src, layer, doc.seed)
         img, ok = self._decode_stage(data, byte_hash, src)
+        # If byte corruption broke a brittle format, retry on a BMP rasterization
+        # so the glitch stays visible instead of silently falling back to clean.
+        if not ok and layer.byte_ops():
+            rsrc = self._rasterized_source(src)
+            if rsrc is not None:
+                data2, byte_hash2 = self._byte_stage(rsrc, layer, doc.seed)
+                img2, ok2 = self._decode_stage(data2, byte_hash2, rsrc)
+                if ok2:
+                    img, ok, byte_hash = img2, True, byte_hash2
         img = self._pixel_stage(img, byte_hash, layer, doc.seed, max_dim)
         img = _resize_to(img, target)
         return img, ok

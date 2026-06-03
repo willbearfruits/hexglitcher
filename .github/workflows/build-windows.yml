@@ -1,0 +1,46 @@
+name: Build Windows
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag to attach the .exe to"
+        default: v3.0.0
+  push:
+    tags: ["v*"]
+
+jobs:
+  windows-exe:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install app + PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          pip install .
+          pip install pyinstaller
+
+      - name: Build standalone .exe
+        run: >
+          pyinstaller --noconfirm --onefile --windowed --name HexGlitcher
+          --collect-all PySide6 --collect-all cv2
+          packaging/pyinstaller/entry.py
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HexGlitcher-Windows
+          path: dist/HexGlitcher.exe
+
+      - name: Attach to release
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload ${{ github.event.inputs.release_tag || github.ref_name }} dist/HexGlitcher.exe --clobber

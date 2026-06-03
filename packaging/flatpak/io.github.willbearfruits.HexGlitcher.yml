@@ -20,8 +20,12 @@ modules:
       build-args:
         - --share=network
     build-commands:
+      # Slim: PySide6-Essentials (QtWidgets/Core/Gui only — no Charts/3D/Quick/
+      # Multimedia) + a single headless OpenCV. Install the app with --no-deps so
+      # it doesn't re-pull non-headless opencv from pyproject.
       - pip3 install --no-cache-dir --prefix=${FLATPAK_DEST}
-        PySide6 numpy Pillow opencv-python-headless .
+        PySide6-Essentials numpy Pillow opencv-python-headless
+      - pip3 install --no-cache-dir --prefix=${FLATPAK_DEST} --no-deps .
       - install -Dm644 packaging/flatpak/io.github.willbearfruits.HexGlitcher.desktop
         ${FLATPAK_DEST}/share/applications/io.github.willbearfruits.HexGlitcher.desktop
       - install -Dm644 icon.png

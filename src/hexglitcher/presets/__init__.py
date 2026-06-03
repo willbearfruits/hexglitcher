@@ -69,7 +69,7 @@ LOOKS: dict[str, dict] = {
         ("jpeg.recompress", {"quality": 8, "iterations": 8}),
         ("byte.noise", {"amount": 22, "mode": "random", "seed": 1}),
     ]},
-    "Datamosh": {"blend": "normal", "opacity": 1.0, "ops": [
+    "Block Smear": {"blend": "normal", "opacity": 1.0, "ops": [
         ("byte.shift", {"offset": 5}),
         ("byte.transpose", {"chunks": 12, "seed": 2}),
         ("pixel.channel_shift", {"shift_r": 10, "shift_b": -8}),

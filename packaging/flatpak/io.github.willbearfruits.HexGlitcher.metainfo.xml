@@ -11,8 +11,8 @@
   <description>
     <p>
       HexGlitcher is a non-destructive, layered, realtime glitch-art studio for
-      images and video. Corrupt raw bytes, sort pixels, mosh frames, and watch it
-      happen live.
+      images and video. Corrupt raw bytes, sort pixels, glitch video frame-by-frame,
+      and watch it happen live.
     </p>
     <p>Features:</p>
     <ul>

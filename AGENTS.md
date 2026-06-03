@@ -8,8 +8,8 @@ project's architecture, commands, and conventions, and it is kept current.
 Quick orientation (see CLAUDE.md for detail):
 
 - This is **HexGlitcher v3**, a PySide6 image-databending app under
-  `src/hexglitcher/`. The root `main.py` is the **legacy v2** Tkinter app and
-  should not be extended (it will be removed when `v3` merges to `master`).
+  `src/hexglitcher/`. (The legacy v2 single-file app was removed; it lives at the
+  `v2.0.0` git tag.)
 - Run: `PYTHONPATH=src python3 -m hexglitcher [image]`.
   Test: `PYTHONPATH=src python3 -m pytest tests/test_v3.py -q`.
 - Architecture: `Document → compositing Layers → non-destructive op-stack`, with

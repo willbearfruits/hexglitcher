@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 HexGlitcher **v3** is a PySide6 desktop app for image **databending** — non-destructive, layered, realtime glitch art. It's a ground-up rewrite of the v2 single-file Tkinter app and lives as a package under `src/hexglitcher/`.
 
-> The repo root still contains the **legacy v2** single-file app (`main.py`, `build.py`, `hexglitcher.spec`, `requirements.txt`). v3 supersedes it; those files will be removed when `v3` merges to `master`. Don't extend v2 — all new work goes in `src/hexglitcher/`.
+> The legacy v2 single-file Tkinter app has been removed; it's preserved at the `v2.0.0` git tag. All work goes in `src/hexglitcher/`.
 
 ## Commands
 
@@ -63,4 +63,4 @@ Write a function decorated with `@register_op(type_id, label, domain, category, 
 ## Conventions
 - Engine code stays Qt-free (so tests run headless and the engine is reusable).
 - Don't claim a GUI build/packaging works unless it was actually run — packaging a PySide6+cv2 app (AppImage etc.) is not verified in CI yet.
-- `git` lives on branch `v3`; `master` holds the shippable v2.0. Two remotes: `origin` (GitHub, canonical) + `gitea`.
+- `master` holds v3 (released as tag `v3.0.0`); v2.0 is preserved at tag `v2.0.0`. Two remotes: `origin` (GitHub, canonical) + `gitea`.

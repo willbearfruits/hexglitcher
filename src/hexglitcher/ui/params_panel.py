@@ -111,6 +111,8 @@ class ParamsPanel(QWidget):
             return self._bool_widget(spec)
         if kind == "choice":
             return self._choice_widget(spec)
+        if kind == "filepath":
+            return self._filepath_widget(spec)
         return self._fallback_widget(spec)
 
     def _int_widget(self, spec: ParamSpec) -> QWidget:
@@ -225,6 +227,31 @@ class ParamsPanel(QWidget):
 
         combo.currentTextChanged.connect(on_change)
         return combo
+
+    def _filepath_widget(self, spec: ParamSpec) -> QWidget:
+        from PySide6.QtWidgets import QFileDialog, QLineEdit
+        host = QWidget()
+        lay = QHBoxLayout(host)
+        lay.setContentsMargins(0, 0, 0, 0)
+        edit = QLineEdit(str(self._op.params[spec.key]))
+        edit.setReadOnly(True)                 # set only via dialog (no typed/injected paths)
+        edit.setPlaceholderText("(no file)")
+        if spec.help:
+            edit.setToolTip(spec.help)
+        btn = QPushButton("Browse…")
+
+        def browse():
+            p, _ = QFileDialog.getOpenFileName(self, "Choose file to mix in")
+            if p:
+                self._op.params[spec.key] = p
+                edit.setText(p)
+                self._emit_changed()
+                self.committed.emit()
+
+        btn.clicked.connect(browse)
+        lay.addWidget(edit, 1)
+        lay.addWidget(btn)
+        return host
 
     def _fallback_widget(self, spec: ParamSpec) -> QWidget:
         from PySide6.QtWidgets import QLineEdit

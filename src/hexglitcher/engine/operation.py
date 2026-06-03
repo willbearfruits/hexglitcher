@@ -158,6 +158,8 @@ class Operation:
 
     def __post_init__(self) -> None:
         # Fill any missing params with defaults; drop unknown keys.
+        if self.type_id not in OP_REGISTRY:
+            raise ValueError(f"Unknown operation type: {self.type_id!r}")
         ot = self.optype
         merged = ot.default_params()
         for k, v in self.params.items():

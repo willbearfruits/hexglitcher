@@ -57,6 +57,13 @@ __pycache__/
 # test_*.jpg
 # test_*.png
 
+# Secrets / credentials (hygiene — none are used, but never commit these)
+.env
+.env.*
+*.pem
+*.key
+*.p12
+
 # Backup files
 *~
 *.orig

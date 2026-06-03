@@ -71,6 +71,8 @@ class RenderWorker(QObject):
         try:
             rgba, ok = self._engine.render(doc, max_dim)
         except Exception:
+            import logging
+            logging.getLogger("hexglitcher.render").exception("render failed")
             rgba, ok = None, False
         if rgba is None:
             self.renderFailed.emit(rid)

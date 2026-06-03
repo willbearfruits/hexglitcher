@@ -100,7 +100,17 @@ def export_video(doc: Document, path: str, fps: float = 24.0,
     from ..engine.layer import SourceImage
     from ..engine.video import SourceVideo
 
-    vid = next((s for s in doc.sources.values() if isinstance(s, SourceVideo)), None)
+    src_vid = next((s for s in doc.sources.values() if isinstance(s, SourceVideo)), None)
+    # Render against a PRIVATE copy of the document so we never mutate the shared
+    # source (and its frame cache) while the GUI's render worker may be using it.
+    pdoc = doc.snapshot()
+    pvid = None
+    if src_vid is not None:
+        pvid = SourceVideo.from_file(src_vid.path)
+        pdoc.sources = {pvid.uid: pvid}
+        for layer in pdoc.layers:
+            layer.source_id = pvid.uid
+
     n = int(frames) if frames else doc.frame_count()
     eng = RenderEngine()
     encoder = video_encoder()
@@ -114,43 +124,49 @@ def export_video(doc: Document, path: str, fps: float = 24.0,
         cmd += ["-map", "0:v:0", "-map", "1:a:0?", "-shortest"]
     cmd += [path]
 
-    errfile = tempfile.TemporaryFile()
-    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE,
-                            stdout=subprocess.DEVNULL, stderr=errfile)
-    cap = cv2.VideoCapture(vid.path) if vid is not None else None
     written = 0
     try:
-        for i in range(n):
-            if cap is not None:
-                ok, frame = cap.read()
-                if not ok:
-                    break
-                ok_b, enc = cv2.imencode(".bmp", frame)
-                if ok_b:
-                    vid._frame_cache = {i: SourceImage(data=enc.tobytes(), ext=".bmp",
-                                                       name=f"{vid.name}#{i}")}
-            snap = doc.snapshot()
-            snap.frame = i
-            rgba, _ = eng.render(snap)
-            if rgba is None:
-                continue
-            bgr = cv2.cvtColor(np.ascontiguousarray(rgba[..., :3]), cv2.COLOR_RGB2BGR)
-            if bgr.shape[:2] != (ch, cw):
-                bgr = cv2.resize(bgr, (cw, ch))
-            proc.stdin.write(bgr.tobytes())
-            written += 1
-            if progress:
-                progress(i + 1, n)
-    finally:
-        if cap is not None:
-            cap.release()
-        try:
-            proc.stdin.close()
-        except Exception:
-            pass
-        proc.wait()
-    if proc.returncode not in (0, None):
-        errfile.seek(0)
-        msg = errfile.read().decode("utf-8", "ignore")[-400:]
-        raise RuntimeError(f"ffmpeg ({encoder}) failed:\n{msg}")
+        with tempfile.TemporaryFile() as errfile:
+            proc = subprocess.Popen(cmd, stdin=subprocess.PIPE,
+                                    stdout=subprocess.DEVNULL, stderr=errfile)
+            cap = cv2.VideoCapture(pvid.path) if pvid is not None else None
+            try:
+                for i in range(n):
+                    if cap is not None:
+                        ok, frame = cap.read()
+                        if not ok:
+                            break
+                        ok_b, enc = cv2.imencode(".bmp", frame)
+                        if ok_b:
+                            pvid._frame_cache = {i: SourceImage(data=enc.tobytes(), ext=".bmp",
+                                                                name=f"{pvid.name}#{i}")}
+                    pdoc.frame = i
+                    rgba, _ = eng.render(pdoc)
+                    if rgba is None:
+                        continue
+                    bgr = cv2.cvtColor(np.ascontiguousarray(rgba[..., :3]), cv2.COLOR_RGB2BGR)
+                    if bgr.shape[:2] != (ch, cw):
+                        bgr = cv2.resize(bgr, (cw, ch))
+                    proc.stdin.write(bgr.tobytes())
+                    written += 1
+                    if progress:
+                        progress(i + 1, n)
+            finally:
+                if cap is not None:
+                    cap.release()
+                try:
+                    proc.stdin.close()
+                except Exception:
+                    pass
+                try:
+                    proc.wait(timeout=120)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait()
+            if proc.returncode not in (0, None):
+                errfile.seek(0)
+                msg = errfile.read().decode("utf-8", "ignore")[-400:]
+                raise RuntimeError(f"ffmpeg ({encoder}) failed:\n{msg}")
+    except FileNotFoundError as exc:
+        raise RuntimeError("ffmpeg was not found on PATH — install ffmpeg to export video.") from exc
     return written

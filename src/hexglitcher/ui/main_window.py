@@ -284,6 +284,23 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Open failed", str(e))
             return
+        # Security: a .glitch can reference arbitrary external files via Inject
+        # ops (their bytes get baked into the result). Warn and let the user drop
+        # the references unless they trust the project.
+        refs = [op.params.get("source", "") for layer in doc.layers for op in layer.ops
+                if op.type_id == "byte.inject" and (op.params.get("source") or "").strip()]
+        if refs:
+            shown = "\n  ".join(refs[:6]) + ("\n  …" if len(refs) > 6 else "")
+            keep = QMessageBox.question(
+                self, "External file references",
+                "This project reads these external files via Inject ops:\n  "
+                f"{shown}\n\nOnly keep them if you trust this project. Keep the references?",
+            ) == QMessageBox.StandardButton.Yes
+            if not keep:
+                for layer in doc.layers:
+                    for op in layer.ops:
+                        if op.type_id == "byte.inject":
+                            op.params["source"] = ""
         self._install_document(doc)
 
     def save_project(self) -> None:

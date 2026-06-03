@@ -110,6 +110,11 @@ class Document:
         import base64
         sources: dict[str, SourceImage] = {}
         for sid, entry in d.get("sources", {}).items():
+            if entry.get("kind") == "video" and entry.get("path"):
+                vsrc = SourceVideo.from_file(entry["path"])
+                vsrc.uid = sid
+                sources[sid] = vsrc
+                continue
             data = base64.b64decode(entry["data_b64"]) if "data_b64" in entry else b""
             src = SourceImage(data=data, ext=entry.get("ext", ""), name=entry.get("name", "image"))
             src.uid = sid
@@ -123,6 +128,10 @@ class Document:
         import base64
         srcs = {}
         for sid, s in self.sources.items():
+            if isinstance(s, SourceVideo):
+                # videos are referenced by path, not embedded (frames are huge)
+                srcs[sid] = {"kind": "video", "path": s.path, "ext": s.ext, "name": s.name}
+                continue
             entry = {"ext": s.ext, "name": s.name}
             if embed_sources:
                 entry["data_b64"] = base64.b64encode(s.data).decode("ascii")

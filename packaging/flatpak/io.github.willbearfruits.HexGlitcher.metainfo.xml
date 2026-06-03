@@ -3,8 +3,8 @@
   <id>io.github.willbearfruits.HexGlitcher</id>
   <name>HexGlitcher</name>
   <summary>Layered, realtime image and video databender</summary>
-  <metadata_license>MIT</metadata_license>
-  <project_license>MIT</project_license>
+  <metadata_license>FSFAP</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
   <developer id="io.github.willbearfruits">
     <name>willbearfruits</name>
   </developer>

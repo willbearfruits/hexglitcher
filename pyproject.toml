@@ -8,7 +8,7 @@ version = "3.0.0"
 description = "Hex-level image databender — non-destructive, layered, realtime glitch art."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = { text = "GPL-3.0-or-later" }
 authors = [{ name = "willbearfruits" }]
 dependencies = [
     "PySide6>=6.6",

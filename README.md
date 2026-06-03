@@ -5,7 +5,7 @@ glitch art, with a live preview that re-decodes as you work. v3 is a ground-up
 PySide6 rewrite with non-destructive layers, a stacked effect pipeline, and
 realtime feedback.
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![License](https://img.shields.io/badge/license-GPLv3-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey.svg)
 
@@ -67,4 +67,4 @@ PYTHONPATH=src python3 -m pytest tests/test_v3.py -q
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Created with [Claude Code](https://claude.com/claude-code).
+GPL-3.0-or-later — see [LICENSE](LICENSE). You're free to use, study, and share it; derivatives must stay open under the same license. Created with [Claude Code](https://claude.com/claude-code).

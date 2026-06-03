@@ -13,7 +13,10 @@ flatpak run org.flatpak.Builder --force-clean --user --install \
     --repo=_repo build-dir "$APP.yml"
 
 # Single-file bundle for distribution / GitHub release.
-flatpak build-bundle _repo HexGlitcher.flatpak "$APP"
+# --runtime-repo embeds a Flathub hint so installing the bundle on any machine
+# with flatpak auto-adds Flathub and pulls the shared KDE runtime (no manual setup).
+flatpak build-bundle --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo \
+    _repo HexGlitcher.flatpak "$APP"
 
 echo
 echo "Built:  $HERE/HexGlitcher.flatpak"

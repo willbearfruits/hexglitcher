@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HexGlitcher — layered realtime databender</title>
+<meta name="description" content="A layered, realtime, non-destructive glitch-art studio for images and video. Corrupt raw bytes, sort pixels, glitch video frame-by-frame — live.">
+<meta property="og:title" content="HexGlitcher">
+<meta property="og:description" content="Layered, realtime, non-destructive glitch-art for images & video.">
+<meta property="og:image" content="https://willbearfruits.github.io/hexglitcher/assets/hero.png">
+<meta property="og:type" content="website">
+<link rel="icon" href="assets/hero.png">
+<style>
+  :root{
+    --bg:#121316; --panel:#1b1c1f; --raised:#26282e; --border:#33363d;
+    --fg:#d8d6d0; --dim:#85878f; --accent:#e8a13a; --cyan:#28b8c8; --mag:#d6469b;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--fg);
+    font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.6;
+    -webkit-font-smoothing:antialiased}
+  a{color:var(--accent);text-decoration:none}
+  .mono{font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace}
+  .wrap{max-width:1060px;margin:0 auto;padding:0 22px}
+
+  /* hero */
+  header{padding:64px 0 40px;border-bottom:1px solid var(--border);
+    background:
+      radial-gradient(900px 380px at 78% -8%, rgba(40,184,200,.10), transparent 60%),
+      radial-gradient(700px 360px at 10% 0%, rgba(214,70,155,.10), transparent 60%);}
+  .hero{display:grid;grid-template-columns:1.05fr .95fr;gap:40px;align-items:center}
+  @media(max-width:820px){.hero{grid-template-columns:1fr;gap:26px}}
+  h1{font-size:clamp(46px,9vw,84px);line-height:.95;letter-spacing:-2px;font-weight:800;
+    font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace}
+  .glitch{position:relative;color:var(--fg)}
+  .glitch::before,.glitch::after{content:attr(data-t);position:absolute;left:0;top:0;width:100%;
+    clip-path:inset(0 0 0 0);opacity:.85}
+  .glitch::before{color:var(--cyan);animation:gl 3.6s infinite linear alternate}
+  .glitch::after{color:var(--mag);animation:gl2 2.8s infinite linear alternate}
+  @keyframes gl{0%{transform:translate(0,0)}10%{transform:translate(-2px,1px)}
+    12%{transform:translate(0,0)}48%{transform:translate(0,0)}50%{transform:translate(2px,-1px)}
+    52%{transform:translate(0,0)}100%{transform:translate(0,0)}}
+  @keyframes gl2{0%{transform:translate(0,0)}20%{transform:translate(2px,0)}
+    22%{transform:translate(0,0)}70%{transform:translate(-2px,1px)}72%{transform:translate(0,0)}100%{transform:translate(0,0)}}
+  @media(prefers-reduced-motion:reduce){.glitch::before,.glitch::after{animation:none}}
+  .tag{margin:18px 0 8px;font-size:20px;color:var(--fg);max-width:34ch}
+  .sub{color:var(--dim);margin-bottom:26px}
+  .cta{display:flex;flex-wrap:wrap;gap:12px}
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:12px 20px;border-radius:9px;
+    font-weight:700;border:1px solid var(--border);background:var(--raised);color:var(--fg);
+    transition:transform .12s ease,border-color .12s ease}
+  .btn:hover{transform:translateY(-2px);border-color:var(--accent)}
+  .btn.primary{background:linear-gradient(180deg,#f0ad44,#e8a13a);color:#1a1206;border-color:transparent}
+  .heroimg{border:1px solid var(--border);border-radius:12px;overflow:hidden;
+    box-shadow:0 20px 60px rgba(0,0,0,.5);aspect-ratio:4/3}
+  .heroimg img{width:100%;height:100%;object-fit:cover;display:block;image-rendering:pixelated}
+
+  section{padding:54px 0;border-bottom:1px solid var(--border)}
+  h2{font-size:13px;letter-spacing:3px;text-transform:uppercase;color:var(--accent);
+    margin-bottom:24px;font-family:"JetBrains Mono",monospace}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:11px;padding:20px}
+  .card h3{font-size:17px;margin-bottom:6px}
+  .card p{color:var(--dim);font-size:14.5px}
+  .emoji{font-size:22px}
+
+  .shot{border:1px solid var(--border);border-radius:12px;overflow:hidden;
+    box-shadow:0 16px 50px rgba(0,0,0,.5)}
+  .shot img{width:100%;display:block}
+
+  .ops{display:flex;flex-wrap:wrap;gap:10px}
+  .chip{background:var(--panel);border:1px solid var(--border);border-radius:999px;
+    padding:7px 14px;font-size:13.5px;color:var(--fg)}
+  .chip b{color:var(--accent)}
+
+  .codeblk{background:#0e0f12;border:1px solid var(--border);border-radius:10px;
+    padding:16px 18px;overflow:auto;color:#cfd2d8;font-size:14px}
+  .codeblk .c{color:var(--dim)}
+  .dl{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:760px){.dl{grid-template-columns:1fr}}
+
+  footer{padding:34px 0;color:var(--dim);font-size:14px;display:flex;
+    justify-content:space-between;flex-wrap:wrap;gap:10px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap hero">
+    <div>
+      <h1 class="glitch" data-t="HexGlitcher">HexGlitcher</h1>
+      <p class="tag">Databending, made accessible.</p>
+      <p class="sub">A layered, realtime, non-destructive glitch-art studio for <b>images &amp; video</b>. Corrupt raw bytes, sort pixels, glitch video frame-by-frame — and watch it happen live.</p>
+      <div class="cta">
+        <a class="btn primary" href="https://github.com/willbearfruits/hexglitcher/releases/latest/download/HexGlitcher.flatpak">⬇ Flatpak (Linux)</a>
+        <a class="btn" href="#get">Install from source</a>
+        <a class="btn" href="https://github.com/willbearfruits/hexglitcher">★ GitHub</a>
+      </div>
+    </div>
+    <div class="heroimg"><img src="assets/hero.png" alt="A glitched image produced by HexGlitcher"></div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2>What it does</h2>
+    <div class="grid">
+      <div class="card"><div class="emoji">🧱</div><h3>Non-destructive layers</h3><p>Stack glitch layers over the original with blend modes &amp; opacity. Nothing is ever baked in until you export.</p></div>
+      <div class="card"><div class="emoji">🎚️</div><h3>Realtime preview</h3><p>Drag a slider, see it instantly. Rendering runs off the UI thread, so it never freezes.</p></div>
+      <div class="card"><div class="emoji">🎬</div><h3>Video</h3><p>Open a clip, scrub or play it, glitch every frame through the same op-stack, and export an MP4.</p></div>
+      <div class="card"><div class="emoji">🎨</div><h3>Looks &amp; 🎲 Surprise</h3><p>One-click curated presets, and a dice button for instant happy accidents.</p></div>
+      <div class="card"><div class="emoji">💾</div><h3>Re-editable projects</h3><p>Save your whole stack as a <span class="mono">.glitch</span> recipe; reopen and keep tweaking. Export images &amp; GIFs.</p></div>
+      <div class="card"><div class="emoji">🧩</div><h3>Two op domains</h3><p>Byte ops corrupt the raw file before decode; pixel ops transform the image after — split at one decode boundary.</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>The studio</h2>
+    <div class="shot"><img src="assets/screenshot.png" alt="HexGlitcher v3 interface"></div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>22 operations</h2>
+    <div class="ops">
+      <span class="chip"><b>Corruption</b> · random / sort / shift / chunk-shuffle / hex find-replace</span>
+      <span class="chip"><b>Audio databend</b> · echo · tremolo · flanger · bitcrush · overdrive</span>
+      <span class="chip"><b>Inject / Mix</b> · weave another file's bytes in</span>
+      <span class="chip"><b>Format</b> · PNG filter-rewrite · JPEG quantize / recompress</span>
+      <span class="chip"><b>Decoder hacks</b> · wrong-width shear · planar tearing</span>
+      <span class="chip"><b>Pixel</b> · threshold sort · channel shift · displacement · noise</span>
+    </div>
+  </div>
+</section>
+
+<section id="get">
+  <div class="wrap">
+    <h2>Get it</h2>
+    <div class="dl">
+      <div class="card">
+        <h3>🐧 Linux — Flatpak</h3>
+        <p style="margin-bottom:12px">One-click, no Python setup.</p>
+        <div class="codeblk mono"><span class="c"># download HexGlitcher.flatpak from the release, then</span><br>
+flatpak install --user HexGlitcher.flatpak<br>
+flatpak run io.github.willbearfruits.HexGlitcher</div>
+      </div>
+      <div class="card">
+        <h3>🛠️ From source — any OS</h3>
+        <p style="margin-bottom:12px">Python 3.10+ · ffmpeg for video export.</p>
+        <div class="codeblk mono">git clone https://github.com/willbearfruits/hexglitcher<br>
+cd hexglitcher &amp;&amp; pip install -e .<br>
+hexglitcher <span class="c"># or: hexglitcher image.png</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="wrap">
+  <span>MIT licensed · built with <a href="https://doc.qt.io/qtforpython-6/">PySide6</a></span>
+  <span><a href="https://github.com/willbearfruits/hexglitcher">github.com/willbearfruits/hexglitcher</a></span>
+</footer>
+
+</body>
+</html>

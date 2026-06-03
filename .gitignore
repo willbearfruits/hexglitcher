@@ -64,6 +64,12 @@ __pycache__/
 *.key
 *.p12
 
+# Flatpak build artifacts
+packaging/flatpak/build-dir/
+packaging/flatpak/_repo/
+packaging/flatpak/.flatpak-builder/
+*.flatpak
+
 # Backup files
 *~
 *.orig

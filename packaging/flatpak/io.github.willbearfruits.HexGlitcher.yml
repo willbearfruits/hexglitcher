@@ -1,0 +1,33 @@
+app-id: io.github.willbearfruits.HexGlitcher
+runtime: org.kde.Platform
+runtime-version: '6.9'
+sdk: org.kde.Sdk
+command: hexglitcher
+
+finish-args:
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri          # GPU / OpenGL for the canvas
+  - --filesystem=host     # open/save images & videos anywhere
+
+modules:
+  - name: hexglitcher
+    buildsystem: simple
+    build-options:
+      # pip needs the network to fetch PySide6/numpy/Pillow/opencv wheels.
+      # (Fine for a self-distributed build; a Flathub submission would vendor these.)
+      build-args:
+        - --share=network
+    build-commands:
+      - pip3 install --no-cache-dir --prefix=${FLATPAK_DEST}
+        PySide6 numpy Pillow opencv-python-headless .
+      - install -Dm644 packaging/flatpak/io.github.willbearfruits.HexGlitcher.desktop
+        ${FLATPAK_DEST}/share/applications/io.github.willbearfruits.HexGlitcher.desktop
+      - install -Dm644 icon.png
+        ${FLATPAK_DEST}/share/icons/hicolor/256x256/apps/io.github.willbearfruits.HexGlitcher.png
+      - install -Dm644 packaging/flatpak/io.github.willbearfruits.HexGlitcher.metainfo.xml
+        ${FLATPAK_DEST}/share/metainfo/io.github.willbearfruits.HexGlitcher.metainfo.xml
+    sources:
+      - type: dir
+        path: ../..

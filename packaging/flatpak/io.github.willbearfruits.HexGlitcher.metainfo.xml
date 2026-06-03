@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.willbearfruits.HexGlitcher</id>
+  <name>HexGlitcher</name>
+  <summary>Layered, realtime image and video databender</summary>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <developer id="io.github.willbearfruits">
+    <name>willbearfruits</name>
+  </developer>
+  <description>
+    <p>
+      HexGlitcher is a non-destructive, layered, realtime glitch-art studio for
+      images and video. Corrupt raw bytes, sort pixels, mosh frames, and watch it
+      happen live.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Non-destructive compositing layers with blend modes and opacity</li>
+      <li>A stacked pipeline of 22 byte- and pixel-domain glitch operations</li>
+      <li>Realtime preview on a background thread</li>
+      <li>Per-frame video glitching with MP4 export</li>
+      <li>One-click Looks, a Surprise button, and re-editable .glitch projects</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">io.github.willbearfruits.HexGlitcher.desktop</launchable>
+  <url type="homepage">https://github.com/willbearfruits/hexglitcher</url>
+  <url type="bugtracker">https://github.com/willbearfruits/hexglitcher/issues</url>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="3.0.0" date="2026-06-03">
+      <description>
+        <p>Ground-up PySide6 rewrite: layers, realtime preview, 22 ops, video glitching.</p>
+      </description>
+    </release>
+  </releases>
+</component>

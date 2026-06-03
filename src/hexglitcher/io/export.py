@@ -35,28 +35,91 @@ def export_document(doc: Document, path: str, quality: int = 92) -> None:
         im.save(path)
 
 
-def export_animation(doc: Document, path: str, frames: int = 16, fps: int = 12) -> int:
-    """Sweep the document seed across `frames` renders and save an animated GIF.
+def _apply_sweep(doc: Document, sweep: dict, t: float) -> None:
+    """Set the swept op parameter to its interpolated value at position t in [0,1]."""
+    try:
+        layer = doc.layers[sweep["layer"]]
+    except (IndexError, KeyError, TypeError):
+        return
+    value = sweep["start"] + (sweep["end"] - sweep["start"]) * t
+    for op in layer.ops:
+        if op.uid == sweep.get("op_uid"):
+            spec = op.optype.spec(sweep["param"])
+            op.params[sweep["param"]] = (
+                int(round(value)) if (spec and spec.kind in ("int", "seed")) else float(value)
+            )
+            return
 
-    The seed feeds every randomized op, so a sweep walks through related-but-
-    different glitches — a moving, evolving version of the current stack.
-    Returns the number of frames written.
+
+def _shared_palette(frames_rgb, colors: int = 256):
+    """One adaptive palette derived from a thumbnail montage of every frame.
+
+    Mapping all frames to a single palette is what kills the per-frame colour
+    flicker that plagues naive frame-by-frame GIF quantization.
+    """
+    thumbs = []
+    for im in frames_rgb:
+        t = im.copy()
+        t.thumbnail((144, 144))
+        thumbs.append(t)
+    w = max(t.width for t in thumbs)
+    montage = Image.new("RGB", (w, sum(t.height for t in thumbs)))
+    y = 0
+    for t in thumbs:
+        montage.paste(t, (0, y))
+        y += t.height
+    return montage.convert("P", palette=Image.Palette.ADAPTIVE, colors=colors)
+
+
+def export_animation(doc: Document, path: str, frames: int = 24, fps: int = 12,
+                     loop: str = "forever", max_dim: Optional[int] = None,
+                     sweep: Optional[dict] = None, dither: bool = True,
+                     progress=None) -> int:
+    """Render an animated GIF from the current stack.
+
+    Without `sweep`, the document **seed** is swept (random-ish variation). With a
+    `sweep` dict ``{layer, op_uid, param, start, end}``, that op parameter is
+    interpolated start->end across the frames for smooth, intentional motion.
+    `loop` is ``"forever" | "once" | "pingpong"``; `max_dim` downscales for a
+    smaller file. All frames share one adaptive palette (optionally dithered) so
+    colours stay stable. `progress(i, n)` is called per frame. Returns frames written.
     """
     eng = RenderEngine()
+    n = max(2, int(frames))
     base_seed = doc.seed
-    imgs = []
-    for i in range(max(1, frames)):
+    rgba_frames = []
+    for i in range(n):
+        t = i / (n - 1)
         snap = doc.snapshot()
-        snap.seed = base_seed + i
-        rgba, _ = eng.render(snap)
+        if sweep:
+            _apply_sweep(snap, sweep, t)
+        else:
+            # Advance the doc seed AND every op's own seed param, so randomized
+            # ops (which use their own seed) actually vary frame to frame.
+            snap.seed = base_seed + i
+            for layer in snap.layers:
+                for op in layer.ops:
+                    if op.params.get("seed") is not None:
+                        op.params["seed"] = int(op.params["seed"]) + i
+        rgba, _ = eng.render(snap, max_dim=max_dim)
         if rgba is not None:
-            imgs.append(Image.fromarray(rgba).convert("RGB"))
-    if not imgs:
+            rgba_frames.append(rgba)
+        if progress:
+            progress(i + 1, n)
+    if not rgba_frames:
         raise RuntimeError("Nothing to export (no decodable image).")
+
+    rgb = [Image.fromarray(f).convert("RGB") for f in rgba_frames]
+    if loop == "pingpong" and len(rgb) > 2:
+        rgb = rgb + rgb[-2:0:-1]                     # there-and-back, no duplicated ends
+    palette = _shared_palette(rgb)
+    d = Image.Dither.FLOYDSTEINBERG if dither else Image.Dither.NONE
+    quant = [im.quantize(palette=palette, dither=d) for im in rgb]
+
     duration = max(20, int(1000 / max(1, fps)))
-    imgs[0].save(path, save_all=True, append_images=imgs[1:],
-                 duration=duration, loop=0, optimize=False, format="GIF")
-    return len(imgs)
+    quant[0].save(path, save_all=True, append_images=quant[1:], duration=duration,
+                  loop=(1 if loop == "once" else 0), optimize=True, disposal=2, format="GIF")
+    return len(quant)
 
 
 _ENCODER_CACHE: dict = {}

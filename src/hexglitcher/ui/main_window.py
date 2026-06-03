@@ -320,18 +320,36 @@ class MainWindow(QMainWindow):
     def export_gif(self) -> None:
         if self.doc is None:
             return
-        frames, ok = QInputDialog.getInt(self, "Export GIF", "Frames (seed sweep):", 16, 2, 240)
-        if not ok:
+        from .gif_dialog import GifExportDialog
+        dlg = GifExportDialog(self.doc, self)
+        if not dlg.exec():
             return
+        opts = dlg.options()
         path, _ = QFileDialog.getSaveFileName(self, "Export GIF", "glitch.gif", "GIF (*.gif)")
         if not path:
             return
         from ..io.export import export_animation
+        prog = QProgressDialog("Rendering GIF…", "Cancel", 0, int(opts["frames"]), self)
+        prog.setWindowModality(Qt.WindowModality.WindowModal)
+        prog.setMinimumDuration(0)
+        prog.setValue(0)
+        state = {"cancel": False}
+
+        def cb(i, n):
+            prog.setValue(i)
+            QApplication.processEvents()
+            if prog.wasCanceled():
+                state["cancel"] = True
+                raise RuntimeError("cancelled")
+
         try:
-            n = export_animation(self.doc, path, frames=frames)
+            n = export_animation(self.doc, path, progress=cb, **opts)
             self._sb_render.setText(f"exported {n}-frame GIF")
         except Exception as e:
-            QMessageBox.critical(self, "Export failed", str(e))
+            if not state["cancel"]:
+                QMessageBox.critical(self, "Export failed", str(e))
+        finally:
+            prog.close()
 
     def export_video_action(self) -> None:
         if self.doc is None or not self.doc.is_video():

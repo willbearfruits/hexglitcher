@@ -20,6 +20,8 @@ dependencies = [
 [project.optional-dependencies]
 # Faster JPEG decode if libjpeg-turbo is available on the system.
 turbo = ["PyTurboJPEG>=2.0"]
+# Numba JITs the hot pixel kernels (pixel sort); recommended for video.
+perf = ["numba>=0.58"]
 dev = ["pytest>=7", "pytest-qt>=4"]
 
 [project.scripts]

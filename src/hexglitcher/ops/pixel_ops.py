@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from ..engine import accel
 from ..engine.operation import OpDomain, register_op
 from .params import p_bool, p_choice, p_float, p_int, p_seed
 
@@ -95,22 +96,24 @@ def _spans(mask_row: np.ndarray):
 )
 def _pixel_sort(img, params, ctx):
     vertical = params["direction"] == "vertical"
-    work = np.swapaxes(img, 0, 1) if vertical else img
-    key = _sort_key(work, params["by"])
+    work = np.ascontiguousarray(np.swapaxes(img, 0, 1) if vertical else img)
+    key = np.ascontiguousarray(_sort_key(work, params["by"]).astype(np.float32))
     bright = _luma(work)
     lo, hi = params["low"] * 255.0, params["high"] * 255.0
-    mask = (bright >= lo) & (bright <= hi)
-    out = work.copy()
+    mask = np.ascontiguousarray((bright >= lo) & (bright <= hi))
     reverse = bool(params["reverse"])
-    h = work.shape[0]
-    for y in range(h):
-        for a, b in _spans(mask[y]):
-            if b - a < 2:
-                continue
-            order = np.argsort(key[y, a:b], kind="stable")
-            if reverse:
-                order = order[::-1]
-            out[y, a:b] = work[y, a:b][order]
+    out = work.copy()
+    if accel.HAVE_NUMBA:
+        accel.sort_spans(out, key, mask, reverse)          # JIT kernel, in-place
+    else:
+        for y in range(work.shape[0]):
+            for a, b in _spans(mask[y]):
+                if b - a < 2:
+                    continue
+                order = np.argsort(key[y, a:b], kind="stable")
+                if reverse:
+                    order = order[::-1]
+                out[y, a:b] = work[y, a:b][order]
     return np.swapaxes(out, 0, 1) if vertical else out
 
 
@@ -129,19 +132,17 @@ def _pixel_sort(img, params, ctx):
 def _row_shift(img, params, ctx):
     cols = params["axis"] == "columns"
     work = np.swapaxes(img, 0, 1) if cols else img
-    h = work.shape[0]
+    h, w = work.shape[:2]
     m = int(params["max_shift"])
     if m <= 0:
         return img
     if params["mode"] == "sine":
-        shifts = (m * np.sin(2 * np.pi * float(params["rate"]) * np.arange(h) / max(1, h))).astype(int)
+        shifts = (m * np.sin(2 * np.pi * float(params["rate"]) * np.arange(h) / max(1, h))).astype(np.int64)
     else:
         shifts = ctx.rng.integers(-m, m + 1, size=h)
-    out = work.copy()
-    for y in range(h):
-        s = int(shifts[y])
-        if s:
-            out[y] = np.roll(work[y], s, axis=0)
+    # vectorized per-row roll: gather columns shifted per row (no Python loop)
+    idx = (np.arange(w)[None, :] - shifts[:, None]) % w
+    out = work[np.arange(h)[:, None], idx]
     return np.swapaxes(out, 0, 1) if cols else out
 
 

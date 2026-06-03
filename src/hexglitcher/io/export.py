@@ -59,30 +59,76 @@ def export_animation(doc: Document, path: str, frames: int = 16, fps: int = 12) 
     return len(imgs)
 
 
+_ENCODER_CACHE: dict = {}
+
+
+def video_encoder() -> str:
+    """Pick a GPU encoder (NVENC) if ffmpeg exposes it, else CPU libx264."""
+    if "enc" not in _ENCODER_CACHE:
+        import subprocess
+        enc = "libx264"
+        try:
+            out = subprocess.run(["ffmpeg", "-hide_banner", "-encoders"],
+                                 capture_output=True, text=True, timeout=10)
+            if "h264_nvenc" in out.stdout:
+                enc = "h264_nvenc"
+        except Exception:
+            pass
+        _ENCODER_CACHE["enc"] = enc
+    return _ENCODER_CACHE["enc"]
+
+
 def export_video(doc: Document, path: str, fps: float = 24.0,
                  frames=None, audio_from=None, progress=None) -> int:
-    """Render every frame of a video document through the stack and write an MP4.
+    """Glitch every frame through the stack and stream it to ffmpeg.
 
-    Each frame is rendered by setting ``doc.frame`` and reusing the whole glitch
-    pipeline. If `audio_from` (the original video path) is given and has an audio
-    track, it's muxed back in with ffmpeg. `progress(i, n)` is called per frame.
-    Returns the number of frames written.
+    Frames are read sequentially (one capture, no per-frame seek) and each is
+    materialized as the source's current frame so the whole pipeline renders it;
+    the result is piped as raw video into ffmpeg, which encodes on the GPU
+    (h264_nvenc when available) and muxes the original audio back in.
+    ``progress(i, n)`` is called per frame. Returns frames written.
     """
+    import subprocess
+    import tempfile
+
     if cv2 is None:
         raise RuntimeError("OpenCV is required for video export.")
     cw, ch = doc.canvas_size()
     if cw <= 0 or ch <= 0:
         raise RuntimeError("Nothing to export.")
+
+    from ..engine.layer import SourceImage
+    from ..engine.video import SourceVideo
+
+    vid = next((s for s in doc.sources.values() if isinstance(s, SourceVideo)), None)
     n = int(frames) if frames else doc.frame_count()
     eng = RenderEngine()
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    silent = path
+    encoder = video_encoder()
+
+    cmd = ["ffmpeg", "-y", "-f", "rawvideo", "-pix_fmt", "bgr24",
+           "-s", f"{cw}x{ch}", "-r", str(float(fps) or 24.0), "-i", "pipe:0"]
     if audio_from:
-        root, ext = os.path.splitext(path)
-        silent = f"{root}.silent{ext or '.mp4'}"
-    writer = cv2.VideoWriter(silent, fourcc, float(fps) or 24.0, (cw, ch))
+        cmd += ["-i", audio_from]
+    cmd += ["-c:v", encoder, "-pix_fmt", "yuv420p"]
+    if audio_from:
+        cmd += ["-map", "0:v:0", "-map", "1:a:0?", "-shortest"]
+    cmd += [path]
+
+    errfile = tempfile.TemporaryFile()
+    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE,
+                            stdout=subprocess.DEVNULL, stderr=errfile)
+    cap = cv2.VideoCapture(vid.path) if vid is not None else None
+    written = 0
     try:
         for i in range(n):
+            if cap is not None:
+                ok, frame = cap.read()
+                if not ok:
+                    break
+                ok_b, enc = cv2.imencode(".bmp", frame)
+                if ok_b:
+                    vid._frame_cache = {i: SourceImage(data=enc.tobytes(), ext=".bmp",
+                                                       name=f"{vid.name}#{i}")}
             snap = doc.snapshot()
             snap.frame = i
             rgba, _ = eng.render(snap)
@@ -91,22 +137,20 @@ def export_video(doc: Document, path: str, fps: float = 24.0,
             bgr = cv2.cvtColor(np.ascontiguousarray(rgba[..., :3]), cv2.COLOR_RGB2BGR)
             if bgr.shape[:2] != (ch, cw):
                 bgr = cv2.resize(bgr, (cw, ch))
-            writer.write(bgr)
+            proc.stdin.write(bgr.tobytes())
+            written += 1
             if progress:
                 progress(i + 1, n)
     finally:
-        writer.release()
-
-    if audio_from:
-        import shutil
-        import subprocess
+        if cap is not None:
+            cap.release()
         try:
-            subprocess.run(
-                ["ffmpeg", "-y", "-i", silent, "-i", audio_from,
-                 "-c:v", "copy", "-map", "0:v:0", "-map", "1:a:0?", "-shortest", path],
-                check=True, capture_output=True,
-            )
-            os.remove(silent)
+            proc.stdin.close()
         except Exception:
-            shutil.move(silent, path)  # no audio track / ffmpeg missing -> keep silent
-    return n
+            pass
+        proc.wait()
+    if proc.returncode not in (0, None):
+        errfile.seek(0)
+        msg = errfile.read().decode("utf-8", "ignore")[-400:]
+        raise RuntimeError(f"ffmpeg ({encoder}) failed:\n{msg}")
+    return written
